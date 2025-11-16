@@ -31,7 +31,9 @@
 В проекте используются открытые датасеты:  
 - **[MovieLens 25M](https://grouplens.org/datasets/movielens/25m/)** — оценки пользователей, теги, ID фильмов.  
 - **[TMDB 5000 Movies Dataset](https://www.kaggle.com/datasets/tmdb/tmdb-movie-metadata)** — метаданные о фильмах (жанры, описания, актёры, бюджеты, сборы).  
-- **[IMDb Datasets](https://www.imdb.com/interfaces/)** — дополнительная информация об актёрах и режиссёрах.  
+- **[IMDb Datasets](https://www.imdb.com/interfaces/)** — дополнительная информация об актёрах и режиссёрах.
+
+- Очищенные и подготовленные данные представлены по **[ссылке](https://disk.360.yandex.ru/d/tgOlYgExcd9S0A)**
 
 ---
 
