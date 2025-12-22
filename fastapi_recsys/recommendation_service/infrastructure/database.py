@@ -1,7 +1,6 @@
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, JSON
 from sqlalchemy.orm import declarative_base, sessionmaker
-import datetime
-from sqlalchemy import func
+from datetime import datetime, timezone
 
 Base = declarative_base()
 
@@ -14,7 +13,7 @@ class RequestHistory(Base):
     top_n = Column(Integer)
     recommendations = Column(JSON)
     processing_time = Column(Float)
-    timestamp = Column(DateTime, server_default=func.now())
+    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     success = Column(Integer)
 
 # SQLite файл будет в data/database.db

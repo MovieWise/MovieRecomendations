@@ -7,6 +7,13 @@ import time
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 import numpy as np
+from fastapi import Header
+import os
+from dotenv import load_dotenv
+from sqlalchemy import delete
+import secrets
+
+load_dotenv()
 
 # Импортируем наши модули
 import infrastructure.database as db
@@ -30,7 +37,7 @@ class HistoryResponse(BaseModel):
     top_n: int
     recommendations: List[int]
     processing_time: float
-    timestamp: datetime
+    timestamp: Optional[datetime] = None
     success: int
     # Этот класс позволит читать данные из ORM-объектов
     class Config:
@@ -79,7 +86,38 @@ def get_database():
         yield session
     finally:
         session.close()
-        
+
+
+def verify_delete_token(x_confirm_token: str = Header(..., description="Токен для подтверждения удаления")):
+    """
+    Проверяет токен для удаления истории.
+    Токен берётся из переменной окружения DELETE_HISTORY_TOKEN
+    """
+    # Получаем токен из .env файла
+    correct_token = os.getenv("DELETE_HISTORY_TOKEN")
+    
+    # Если в .env нет токена - ошибка конфигурации
+    if not correct_token:
+        raise HTTPException(
+            status_code=500,
+            detail="Сервер не настроен: отсутствует DELETE_HISTORY_TOKEN"
+        )
+    
+    if not x_confirm_token:
+        raise HTTPException(
+            status_code=401,
+            detail="Требуется токен подтверждения"
+        )
+    
+    # Безопасное сравнение токенов
+    if not secrets.compare_digest(x_confirm_token, correct_token):
+        raise HTTPException(
+            status_code=401,
+            detail="Неверный токен подтверждения"
+        )
+    
+    return True
+
 
 # --- Эндпоинты ---
 @app.get("/")
@@ -214,3 +252,41 @@ def get_stats(db_session = Depends(get_database)):
         most_common_top_n=most_common_top_n,
         requests_per_model=model_counts
     )   
+
+@app.delete("/history")
+def delete_history(
+    token_verified: bool = Depends(verify_delete_token),  # 1. Проверяем токен
+    db_session = Depends(get_database)                    # 2. Получаем сессию БД
+):
+    """
+    Удаляет всю историю запросов.
+    Требует заголовок X-Confirm-Token с правильным значением.
+    """
+
+    try:
+        # Создаем команду DELETE для всей таблицы
+        delete_comand = delete(db.RequestHistory)
+
+        # выполняем удаление
+        result = db_session.execute(delete_comand)
+
+        # Подтверждение
+        db_session.commit()
+
+        # возвращаем ответ
+        return {
+            "success": True,
+            "message": f"История запросов удалена. Удалено записей: {result.rowcount}"
+        }
+    except Exception as e:
+        # Если ошибка - откатываем изменения
+        db_session.rollback()
+        
+        # Логируем ошибку (в консоль)
+        print(f"Ошибка при удалении истории: {e}")
+        
+        # Возвращаем ошибку пользователю
+        raise HTTPException(
+            status_code=500,
+            detail="Не удалось удалить историю запросов"
+        )
