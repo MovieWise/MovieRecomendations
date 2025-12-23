@@ -8,3 +8,4 @@ venv/
 
 # Data / models
 *.db
+*.pkl
