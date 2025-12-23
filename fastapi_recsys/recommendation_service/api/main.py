@@ -22,6 +22,7 @@ from core.model_manager import ModelManager
 # --- Pydantic модели для запросов/ответов ---
 class ForwardRequest(BaseModel):
     user_id: int
+    model: str = "mostpop"
     top_n: Optional[int] = 10
 
 class ForwardResponse(BaseModel):
@@ -67,12 +68,17 @@ model_manager = ModelManager()
 # Создаем функцию жизненного цикла (lifespan)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Этот код выполняется ПРИ СТАРТЕ приложения
+
+    # Загружаем БД
     db.init_db()
+
+    #Загружаем модели
     model_manager.load_mostpop()
-    print("✅ База данных и модель MostPop загружены")
-    yield  # Здесь FastAPI запускается и работает
-    # Этот код выполняется ПРИ ОСТАНОВКЕ (пока оставляем пустым)
+    model_manager.load_puresvd()
+
+    print("✅ База данных и модели загружены")
+    yield
+    # Этот код выполняется ПРИ ОСТАНОВКЕ
 
 # Передаем lifespan при создании приложения
 app = FastAPI(title="Recommendation Service", lifespan=lifespan)
@@ -137,19 +143,30 @@ def forward(
     Получить рекомендации для пользователя.
     Пример запроса: {"user_id": 28, "top_n": 5}
     """
+    if request.model not in ["mostpop", "puresvd"]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Модель '{request.model}' не поддерживается. Доступно: mostpop, puresvd"
+        )
     start_time = time.time()
     
     try:
-        # 1. Получаем рекомендации от модели
-        recommendations = model_manager.predict_mostpop(
-            user_id=request.user_id,
-            top_n=request.top_n
-        )
+        if request.model == "mostpop":
+            # 1. Получаем рекомендации от модели
+            recommendations = model_manager.predict_mostpop(
+                user_id=request.user_id,
+                top_n=request.top_n
+            )
+        elif request.model == "puresvd":
+            recommendations = model_manager.predict_puresvd(
+                user_id=request.user_id,
+                top_n=request.top_n
+            )
         
         # 2. Сохраняем запрос в историю
         history_record = db.RequestHistory(
             user_id=request.user_id,
-            model_name="mostpop",
+            model_name=request.model,
             top_n=request.top_n,
             recommendations=recommendations,
             processing_time=time.time() - start_time,
