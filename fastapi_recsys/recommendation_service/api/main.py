@@ -73,8 +73,18 @@ async def lifespan(app: FastAPI):
     db.init_db()
 
     #Загружаем модели
-    model_manager.load_mostpop()
-    model_manager.load_puresvd()
+    try:
+        model_manager.load_mostpop()
+    except FileNotFoundError:
+        print("Ошибка при загрузке MostPop - Файл не найден!")
+    try:
+        model_manager.load_puresvd()
+    except FileNotFoundError:
+        print("Ошибка при загрузке PureSVD - Файл не найден!") 
+    try:
+        model_manager.load_ease()
+    except FileNotFoundError:
+        print("Ошибка при загрузке EASE - Файл не найден!") 
 
     print("✅ База данных и модели загружены")
     yield
@@ -143,10 +153,10 @@ def forward(
     Получить рекомендации для пользователя.
     Пример запроса: {"user_id": 28, "top_n": 5}
     """
-    if request.model not in ["mostpop", "puresvd"]:
+    if request.model not in ["mostpop", "puresvd", "ease"]:
         raise HTTPException(
             status_code=400,
-            detail=f"Модель '{request.model}' не поддерживается. Доступно: mostpop, puresvd"
+            detail=f"Модель '{request.model}' не поддерживается. Доступно: mostpop, puresvd, ease"
         )
     start_time = time.time()
     
@@ -159,6 +169,11 @@ def forward(
             )
         elif request.model == "puresvd":
             recommendations = model_manager.predict_puresvd(
+                user_id=request.user_id,
+                top_n=request.top_n
+            )
+        elif request.model == "ease":
+            recommendations = model_manager.predict_ease(
                 user_id=request.user_id,
                 top_n=request.top_n
             )

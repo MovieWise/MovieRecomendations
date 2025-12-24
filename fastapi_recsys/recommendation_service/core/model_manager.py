@@ -2,18 +2,26 @@ import pickle
 import os
 from scipy.sparse import load_npz
 import numpy as np
+import joblib
 
 class ModelManager:
     def __init__(self):
         self.user_encoder = None
         self.item_encoder = None
         self.most_popular_items = None
-        #новые поля для PureSVD
+
+        # PureSVD
         self.U = None
         self.S = None
         self.Vt = None
         self.R_ratings = None
         self.n_factors = None
+
+        # EASE
+        self.ease_weights = None
+        self.ease_item_encoder = None # Отдельный энкодер для EASE, если он отличается
+        self.ease_user_encoder = None
+        self.ease_interactions = None
         
     def load_mostpop(self):
         """Загружает данные для MostPop модели"""
@@ -103,4 +111,45 @@ class ModelManager:
         top_indices = np.argsort(scores)[::-1][:top_n]
         recommendations = self.item_encoder.inverse_transform(top_indices)
         
+        return recommendations.tolist()
+
+    def load_ease(self):
+        """Загрузка всех компонентов именно для EASE"""
+        data_dir = 'data'
+        
+        # Загружаем матрицу весов B
+        self.ease_weights = np.load(os.path.join(data_dir, 'ease_weights_f16.npy'))
+        
+        # Загружаем матрицу взаимодействий X
+        self.ease_interactions = load_npz(os.path.join(data_dir, 'ease_interaction_matrix.npz'))
+        
+        # Загружаем энкодеры
+        self.ease_user_encoder = joblib.load(os.path.join(data_dir, 'ease_user_encoder.joblib'))
+        self.ease_item_encoder = joblib.load(os.path.join(data_dir, 'item_encoder.joblib'))
+
+        print(f"✅ EASE компоненты загружены успешно")
+        return self
+
+    def predict_ease(self, user_id, top_n=10):
+        # 1. Проверка пользователя
+        if user_id not in self.ease_user_encoder.classes_:
+            raise ValueError(f"User {user_id} not found for EASE")
+
+        # 2. Кодируем ID
+        user_idx = self.ease_user_encoder.transform([user_id])[0]
+
+        # 3. Извлекаем строку взаимодействий пользователя (X_u)
+        user_row = self.ease_interactions[user_idx].toarray().flatten()
+
+        # 4. Вычисляем скоры: dot(X_u, B)
+        scores = user_row.astype(np.float32) @ self.ease_weights.astype(np.float32)
+
+        # 5. Маскируем уже просмотренные айтемы
+        seen_indices = user_row.nonzero()[0]
+        scores[seen_indices] = -np.inf
+
+        # 6. Сортируем и декодируем
+        top_indices = np.argsort(scores)[::-1][:top_n]
+        recommendations = self.ease_item_encoder.inverse_transform(top_indices)
+
         return recommendations.tolist()

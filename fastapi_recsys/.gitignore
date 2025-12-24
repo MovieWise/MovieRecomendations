@@ -9,3 +9,5 @@ venv/
 # Data / models
 *.db
 *.pkl
+*.joblib
+*.npy
