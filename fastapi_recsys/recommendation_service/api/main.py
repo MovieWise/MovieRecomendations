@@ -86,9 +86,8 @@ async def lifespan(app: FastAPI):
     except FileNotFoundError:
         print("Ошибка при загрузке EASE - Файл не найден!") 
 
-    print("✅ База данных и модели загружены")
+    print("База данных и модели загружены")
     yield
-    # Этот код выполняется ПРИ ОСТАНОВКЕ
 
 # Передаем lifespan при создании приложения
 app = FastAPI(title="Recommendation Service", lifespan=lifespan)
@@ -140,10 +139,6 @@ def verify_delete_token(x_confirm_token: str = Header(..., description="Токе
 def read_root():
     return {"message": "Recommendation Service is running! Use /forward POST"}
 
-@app.get("/health")
-def health_check():
-    return {"status": "healthy"}
-
 @app.post("/forward", response_model=ForwardResponse)
 def forward(
     request: ForwardRequest,
@@ -156,10 +151,12 @@ def forward(
     if request.model not in ["mostpop", "puresvd", "ease"]:
         raise HTTPException(
             status_code=400,
-            detail=f"Модель '{request.model}' не поддерживается. Доступно: mostpop, puresvd, ease"
+            detail=f"Bad Request: Модель '{request.model}' не поддерживается. Доступно: mostpop, puresvd, ease"
         )
     start_time = time.time()
-    
+    recommendations = []
+    success = 0
+
     try:
         if request.model == "mostpop":
             # 1. Получаем рекомендации от модели
@@ -178,31 +175,40 @@ def forward(
                 top_n=request.top_n
             )
         
+        success = 1
+
+    except ValueError as e:
+        # Пользователь не найден
+        error_detail = str(e)
+        raise_type = HTTPException(status_code=400, detail=error_detail)
+    except Exception as e:
+        # Любая другая ошибка
+        error_detail = "модель не смогла обработать данные"
+        raise_type = HTTPException(status_code=403, detail=error_detail)
+
+    finally:
+        processing_time=time.time() - start_time
         # 2. Сохраняем запрос в историю
         history_record = db.RequestHistory(
             user_id=request.user_id,
             model_name=request.model,
             top_n=request.top_n,
             recommendations=recommendations,
-            processing_time=time.time() - start_time,
-            success=1
+            processing_time=processing_time,
+            success=success
         )
         db_session.add(history_record)
         db_session.commit()
+
+        if success == 0:
+            raise raise_type
         
         # 3. Возвращаем результат
         return ForwardResponse(
             success=True,
             recommendations=recommendations,
-            processing_time=time.time() - start_time
+            processing_time=processing_time
         )
-        
-    except ValueError as e:
-        # Пользователь не найден
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        # Любая другая ошибка
-        raise HTTPException(status_code=500, detail="Внутренняя ошибка сервера")
     
 
 @app.get("/history", response_model=List[HistoryResponse])

@@ -37,7 +37,7 @@ class ModelManager:
         self.item_encoder = data['item_encoder']
         self.most_popular_items = data['most_popular_items']
         
-        print(f"✅ MostPop загружен. Популярных фильмов: {len(self.most_popular_items)}")
+        print(f" MostPop загружен. Популярных фильмов: {len(self.most_popular_items)}")
         return self
     
     def predict_mostpop(self, user_id, top_n=10):
@@ -47,7 +47,7 @@ class ModelManager:
         """
         # 1. Проверяем, что пользователь существует
         if user_id not in self.user_encoder.classes_:
-            raise ValueError(f"Пользователь {user_id} не найден в системе")
+            raise ValueError(f"Bad Request: Пользователь {user_id} не найден в системе")
         
         # 2. Берем топ-N популярных фильмов (в encoded формате)
         recommendations_enc = self.most_popular_items[:top_n]
@@ -79,7 +79,7 @@ class ModelManager:
         self.R_ratings = puresvd_data['R_ratings']
         self.n_factors = puresvd_data['n_factors']
 
-        print(f"✅ PureSVD загружен. Факторов: {self.n_factors}")
+        print(f" PureSVD загружен. Факторов: {self.n_factors}")
         print(f"   Пользователей: {self.U.shape[0]}, Фильмов: {self.Vt.shape[1]}")
         return self
 
@@ -90,7 +90,7 @@ class ModelManager:
         """
         # 1. Проверяем, что пользователь существует
         if user_id not in self.user_encoder.classes_:
-            raise ValueError(f"Пользователь {user_id} не найден в системе")
+            raise ValueError(f"Bad Request: Пользователь {user_id} не найден в системе")
         
         # 2. Преобразуем в encoded
         user_id_enc = self.user_encoder.transform([user_id])[0]
@@ -127,13 +127,13 @@ class ModelManager:
         self.ease_user_encoder = joblib.load(os.path.join(data_dir, 'ease_user_encoder.joblib'))
         self.ease_item_encoder = joblib.load(os.path.join(data_dir, 'item_encoder.joblib'))
 
-        print(f"✅ EASE компоненты загружены успешно")
+        print(f" EASE компоненты загружены успешно")
         return self
 
     def predict_ease(self, user_id, top_n=10):
         # 1. Проверка пользователя
         if user_id not in self.ease_user_encoder.classes_:
-            raise ValueError(f"User {user_id} not found for EASE")
+            raise ValueError(f"Bad Request: Пользователь {user_id} не найден в системе")
 
         # 2. Кодируем ID
         user_idx = self.ease_user_encoder.transform([user_id])[0]
