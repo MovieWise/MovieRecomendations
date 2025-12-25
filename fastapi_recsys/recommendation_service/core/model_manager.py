@@ -19,20 +19,20 @@ class ModelManager:
 
         # EASE
         self.ease_weights = None
-        self.ease_item_encoder = None # Отдельный энкодер для EASE, если он отличается
+        self.ease_item_encoder = None 
         self.ease_user_encoder = None
         self.ease_interactions = None
         
     def load_mostpop(self):
-        """Загружает данные для MostPop модели"""
-        # Путь к файлу с данными
+        """Load data for mostpop model"""
+        # Path to data file
         data_path = os.path.join('data', 'mostpop_data.pkl')
         
-        # Загружаем данные
+        # Load data
         with open(data_path, 'rb') as f:
             data = pickle.load(f)
         
-        # Сохраняем в атрибуты класса
+        # Save to class attributes
         self.user_encoder = data['user_encoder']
         self.item_encoder = data['item_encoder']
         self.most_popular_items = data['most_popular_items']
@@ -42,23 +42,23 @@ class ModelManager:
     
     def predict_mostpop(self, user_id, top_n=10):
         """
-        Предсказание для пользователя.
-        user_id - исходный ID пользователя (не encoded)
+        Mostpop user recs.
+        user_id - origin ID of user
         """
-        # 1. Проверяем, что пользователь существует
+        # Check that the user exists
         if user_id not in self.user_encoder.classes_:
             raise ValueError(f"Bad Request: Пользователь {user_id} не найден в системе")
         
-        # 2. Берем топ-N популярных фильмов (в encoded формате)
+        # Take top n popular films
         recommendations_enc = self.most_popular_items[:top_n]
         
-        # 3. Преобразуем обратно в исходные movieId
+        # Convert back to the original movieId
         recommendations = self.item_encoder.inverse_transform(recommendations_enc)
         
         return recommendations.tolist()
     
     def get_user_stats(self):
-        """Информация о загруженных данных"""
+        """Info about downloaded data"""
         if self.user_encoder is None:
             return "Модель не загружена"
         
@@ -85,45 +85,45 @@ class ModelManager:
 
     def predict_puresvd(self, user_id, top_n = 10):
         """
-        Рекомендации PureSVD для пользователя.
-        user_id - исходный ID пользователя (не encoded)
+        PureSVD user recs.
+        user_id - origin ID of user
         """
-        # 1. Проверяем, что пользователь существует
+        # Check that the user exists
         if user_id not in self.user_encoder.classes_:
             raise ValueError(f"Bad Request: Пользователь {user_id} не найден в системе")
         
-        # 2. Преобразуем в encoded
+        # Transform to encoded
         user_id_enc = self.user_encoder.transform([user_id])[0]
 
-        # 3. Получаем предсказания:
+        # Get prediction
         V_scaled = self.S @ self.Vt
 
-        # 4. Предсказания для одного пользователя
-        user_factors = self.U[user_id_enc]  # вектор факторов пользователя
-        scores = user_factors @ V_scaled    # предсказания для всех фильмов
+        # Preds for one user
+        user_factors = self.U[user_id_enc]  # user features vector
+        scores = user_factors @ V_scaled    # prediction for all movies
 
-        # 5. Исключаем уже просмотренные
-        # Получаем индексы фильмов, которые пользователь уже оценивал
+        # Exclude seen
+        # Get ids of seen movies
         rated_indices = self.R_ratings[user_id_enc].nonzero()[1]
-        scores[rated_indices] = -np.inf  # исключаем
+        scores[rated_indices] = -np.inf 
 
-        # 6. Берем топ-N
+        # Take top n
         top_indices = np.argsort(scores)[::-1][:top_n]
         recommendations = self.item_encoder.inverse_transform(top_indices)
         
         return recommendations.tolist()
 
     def load_ease(self):
-        """Загрузка всех компонентов именно для EASE"""
+        """Load data for EASE"""
         data_dir = 'data'
         
-        # Загружаем матрицу весов B
+        # Load weights matrix B
         self.ease_weights = np.load(os.path.join(data_dir, 'ease_weights_f16.npy'))
         
-        # Загружаем матрицу взаимодействий X
+        # Load matrix of interactions X
         self.ease_interactions = load_npz(os.path.join(data_dir, 'ease_interaction_matrix.npz'))
         
-        # Загружаем энкодеры
+        # Load encoders
         self.ease_user_encoder = joblib.load(os.path.join(data_dir, 'ease_user_encoder.joblib'))
         self.ease_item_encoder = joblib.load(os.path.join(data_dir, 'item_encoder.joblib'))
 
@@ -131,24 +131,24 @@ class ModelManager:
         return self
 
     def predict_ease(self, user_id, top_n=10):
-        # 1. Проверка пользователя
+        # Check the user
         if user_id not in self.ease_user_encoder.classes_:
             raise ValueError(f"Bad Request: Пользователь {user_id} не найден в системе")
 
-        # 2. Кодируем ID
+        # Encode id
         user_idx = self.ease_user_encoder.transform([user_id])[0]
 
-        # 3. Извлекаем строку взаимодействий пользователя (X_u)
+        # Extract the user interaction string (X_u)
         user_row = self.ease_interactions[user_idx].toarray().flatten()
 
-        # 4. Вычисляем скоры: dot(X_u, B)
+        # Calculate scores: dot(X_u, B)
         scores = user_row.astype(np.float32) @ self.ease_weights.astype(np.float32)
 
-        # 5. Маскируем уже просмотренные айтемы
+        # Exclude seen items
         seen_indices = user_row.nonzero()[0]
         scores[seen_indices] = -np.inf
 
-        # 6. Сортируем и декодируем
+        # Sort and decode
         top_indices = np.argsort(scores)[::-1][:top_n]
         recommendations = self.ease_item_encoder.inverse_transform(top_indices)
 
