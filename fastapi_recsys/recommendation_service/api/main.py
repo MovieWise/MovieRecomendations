@@ -15,11 +15,11 @@ import secrets
 
 load_dotenv()
 
-# Импортируем наши модули
+# Modules import
 import infrastructure.database as db
 from core.model_manager import ModelManager
 
-# --- Pydantic модели для запросов/ответов ---
+# Pydantic models
 class ForwardRequest(BaseModel):
     user_id: int
     model: str = "mostpop"
@@ -30,7 +30,7 @@ class ForwardResponse(BaseModel):
     recommendations: List[int]
     processing_time: float
 
-# Модель для ответа истории запросов
+# History model
 class HistoryResponse(BaseModel):
     id: int
     user_id: int
@@ -40,39 +40,39 @@ class HistoryResponse(BaseModel):
     processing_time: float
     timestamp: Optional[datetime] = None
     success: int
-    # Этот класс позволит читать данные из ORM-объектов
+    # Class for reading data from orm objects
     class Config:
-        from_attributes = True  # Ранее назывался orm_mode
+        from_attributes = True
 
-# Модель для статистики
+# Statistic model
 class StatsResponse(BaseModel):
-    # Общая статистика
+    # General statistic
     total_requests: int
     successful_requests: int
     failed_requests: int
     
-    # Время обработки
+    # Processing time
     mean_processing_time: float
-    p50_processing_time: float  # 50% перцентиль (медиана)
-    p95_processing_time: float  # 95% перцентиль
-    p99_processing_time: float  # 99% перцентиль
+    p50_processing_time: float  # 50% percentile
+    p95_processing_time: float  # 95% percentile
+    p99_processing_time: float  # 99% percentile
     
-    # Характеристики запросов (пока простые)
+    # Query characteristics
     unique_users_count: int
     most_common_top_n: int
     requests_per_model: dict
 
-# --- Инициализация ModelManager ---
+# ModelManager initialization
 model_manager = ModelManager()
 
-# Создаем функцию жизненного цикла (lifespan)
+# Lifespan creation
 @asynccontextmanager
 async def lifespan(app: FastAPI):
 
-    # Загружаем БД
+    # Load database
     db.init_db()
 
-    #Загружаем модели
+    # Load models
     try:
         model_manager.load_mostpop()
     except FileNotFoundError:
@@ -89,11 +89,11 @@ async def lifespan(app: FastAPI):
     print("База данных и модели загружены")
     yield
 
-# Передаем lifespan при создании приложения
+
 app = FastAPI(title="Recommendation Service", lifespan=lifespan)
 
 
-# --- Зависимость для получения сессии БД ---
+# Dependency for getting a DB session
 def get_database():
     database = db.get_db()
     session = next(database)
@@ -105,13 +105,13 @@ def get_database():
 
 def verify_delete_token(x_confirm_token: str = Header(..., description="Токен для подтверждения удаления")):
     """
-    Проверяет токен для удаления истории.
-    Токен берётся из переменной окружения DELETE_HISTORY_TOKEN
+    Checks the token for deleting history.
+    The token is taken from the DELETE_HISTORY_TOKEN environment variable
     """
-    # Получаем токен из .env файла
+    # Geting token from .env file
     correct_token = os.getenv("DELETE_HISTORY_TOKEN")
     
-    # Если в .env нет токена - ошибка конфигурации
+    # if not - error
     if not correct_token:
         raise HTTPException(
             status_code=500,
@@ -124,7 +124,7 @@ def verify_delete_token(x_confirm_token: str = Header(..., description="Токе
             detail="Требуется токен подтверждения"
         )
     
-    # Безопасное сравнение токенов
+    # Safe token comparison
     if not secrets.compare_digest(x_confirm_token, correct_token):
         raise HTTPException(
             status_code=401,
@@ -134,7 +134,7 @@ def verify_delete_token(x_confirm_token: str = Header(..., description="Токе
     return True
 
 
-# --- Эндпоинты ---
+# Endpoints
 @app.get("/")
 def read_root():
     return {"message": "Recommendation Service is running! Use /forward POST"}
@@ -145,8 +145,8 @@ def forward(
     db_session = Depends(get_database)
 ):
     """
-    Получить рекомендации для пользователя.
-    Пример запроса: {"user_id": 28, "top_n": 5}
+    Get user recomendations
+    Request example: {"user_id": 28, "top_n": 5}
     """
     if request.model not in ["mostpop", "puresvd", "ease"]:
         raise HTTPException(
@@ -159,7 +159,7 @@ def forward(
 
     try:
         if request.model == "mostpop":
-            # 1. Получаем рекомендации от модели
+            # Get recs from model
             recommendations = model_manager.predict_mostpop(
                 user_id=request.user_id,
                 top_n=request.top_n
@@ -178,17 +178,17 @@ def forward(
         success = 1
 
     except ValueError as e:
-        # Пользователь не найден
+        # User does not exist
         error_detail = str(e)
         raise_type = HTTPException(status_code=400, detail=error_detail)
     except Exception as e:
-        # Любая другая ошибка
+        # Other error
         error_detail = "модель не смогла обработать данные"
         raise_type = HTTPException(status_code=403, detail=error_detail)
 
     finally:
         processing_time=time.time() - start_time
-        # 2. Сохраняем запрос в историю
+        # Save request in history
         history_record = db.RequestHistory(
             user_id=request.user_id,
             model_name=request.model,
@@ -203,7 +203,7 @@ def forward(
         if success == 0:
             raise raise_type
         
-        # 3. Возвращаем результат
+        # Return result
         return ForwardResponse(
             success=True,
             recommendations=recommendations,
@@ -218,17 +218,17 @@ def get_history(
     db_session = Depends(get_database)
 ):
     """
-    Получить историю запросов:
-    - skip: сколько записей пропустить (для пагинации/удобства навигации)
-    - limit: сколько записей вернуть (максимум)
+    Get requests history:
+    - skip: how many records to skip
+    - limit: how many records to return
     """
-    # Получаем записи с пагинацией
-    # order_by - сортируем по времени (сначала новые)
+
+    # Getting records with pagination
     query = select(db.RequestHistory).order_by(
         db.RequestHistory.timestamp.desc()
     ).offset(skip).limit(limit)
 
-    # выполняем запрос
+    # Execute the request
     history_records = db_session.execute(query).scalars().all()
 
     return history_records
@@ -236,14 +236,13 @@ def get_history(
 @app.get("/stats", response_model= StatsResponse)
 def get_stats(db_session = Depends(get_database)):
     """
-    Получить статистику запросов.
+    Get requests statistic
     """
-    # Получаем все записи истории
+    # Get all requests
     query = select(db.RequestHistory)
     all_records = db_session.execute(query).scalars().all()
 
     if not all_records:
-            # Если нет записов, возвращаем пустую статистику
             return StatsResponse(
                 total_requests=0,
                 successful_requests=0,
@@ -263,17 +262,17 @@ def get_stats(db_session = Depends(get_database)):
 
     processing_times = [r.processing_time for r in all_records]
     
-    # Преобразуем в numpy массив для вычисления квантилей
+    # Converting a Numpy array
     times_array = np.array(processing_times)
     
-    # Статистика по пользователям и параметрам
+    # Statistics by users and parameters
     unique_users = len(set(r.user_id for r in all_records))
 
-    # Самый популярный top_n  - мода
+    # The most popular top_n - mode
     top_n_values = [r.top_n for r in all_records]
     most_common_top_n = max(set(top_n_values), key=top_n_values.count)
 
-    # ЗАПРОСЫ по моделям
+    # Request by models
     model_counts = {}
     for r in all_records:
         model_counts[r.model_name] = model_counts.get(r.model_name, 0) + 1
@@ -293,37 +292,33 @@ def get_stats(db_session = Depends(get_database)):
 
 @app.delete("/history")
 def delete_history(
-    token_verified: bool = Depends(verify_delete_token),  # 1. Проверяем токен
-    db_session = Depends(get_database)                    # 2. Получаем сессию БД
+    token_verified: bool = Depends(verify_delete_token),  # Checking the token
+    db_session = Depends(get_database)                    # Getting a db session
 ):
     """
-    Удаляет всю историю запросов.
-    Требует заголовок X-Confirm-Token с правильным значением.
+    Deletes all query history.
+    Requires an X-Confirm-Token header with a valid value.
     """
 
     try:
-        # Создаем команду DELETE для всей таблицы
+
         delete_comand = delete(db.RequestHistory)
 
-        # выполняем удаление
         result = db_session.execute(delete_comand)
 
-        # Подтверждение
         db_session.commit()
 
-        # возвращаем ответ
         return {
             "success": True,
             "message": f"История запросов удалена. Удалено записей: {result.rowcount}"
         }
     except Exception as e:
-        # Если ошибка - откатываем изменения
+
         db_session.rollback()
         
-        # Логируем ошибку (в консоль)
         print(f"Ошибка при удалении истории: {e}")
         
-        # Возвращаем ошибку пользователю
+        # Returning an error
         raise HTTPException(
             status_code=500,
             detail="Не удалось удалить историю запросов"
