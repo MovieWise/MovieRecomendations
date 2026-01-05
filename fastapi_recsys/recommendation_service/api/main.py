@@ -30,6 +30,11 @@ class ForwardResponse(BaseModel):
     recommendations: List[int]
     processing_time: float
 
+class PredictRawRequest(BaseModel):
+    selected_movie_ids: List[int]
+    model: str = "puresvd"
+    top_n: int = 5
+
 # History model
 class HistoryResponse(BaseModel):
     id: int
@@ -210,6 +215,38 @@ def forward(
             processing_time=processing_time
         )
     
+@app.post("/predict_raw", response_model=ForwardResponse)
+async def predict_raw(
+    request: PredictRawRequest,
+    db_session = Depends(get_database)
+):
+    start_time = time.time()
+    
+    # 1. Проверка модели
+    if request.model not in ["puresvd", "ease"]:
+        raise HTTPException(status_code=400, detail="Эта модель не поддерживает raw-предикты")
+
+    try:
+        # 2. Логика предсказания "на лету"
+        # Передаем список ID напрямую в модель. 
+        # Внутри модель должна построить вектор, где на позициях выбранных фильмов стоят 1
+        recommendations = model_manager.predict_for_new_user(
+            item_ids=request.selected_movie_ids,
+            model_name=request.model,
+            top_n=request.top_n
+        )
+        
+        processing_time = time.time() - start_time
+        
+        # 3. Возвращаем результат (без сохранения в историю или с пометкой "new_user")
+        return ForwardResponse(
+            success=True,
+            recommendations=recommendations,
+            processing_time=processing_time
+        )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка инференса: {str(e)}")
 
 @app.get("/history", response_model=List[HistoryResponse])
 def get_history(

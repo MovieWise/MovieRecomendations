@@ -153,3 +153,37 @@ class ModelManager:
         recommendations = self.ease_item_encoder.inverse_transform(top_indices)
 
         return recommendations.tolist()
+
+    def predict_for_new_user(self, item_ids, model_name="puresvd", top_n=10):
+        # 1. Превращаем внешние ID фильмов во внутренние индексы
+        # Используем твой существующий item_encoder
+        item_indices = self.item_encoder.transform(item_ids)
+        
+        # 2. Создаем вектор предпочтений (zeros)
+        # Размер вектора = количеству всех фильмов в системе
+        if model_name == "puresvd":
+            num_items = len(self.item_encoder.classes_)
+        else:
+            num_items = 10000
+        user_vector = np.zeros(num_items)
+        user_vector[item_indices] = 1  # Ставим 1 там, где пользователю понравилось
+        
+        if model_name == "puresvd":
+            # Логика PureSVD для нового вектора:
+            # scores = (user_vector @ Vt.T) @ Vt
+            # Но у тебя есть Vt и S, можно сделать проще через проекцию:
+            V = self.Vt.T
+            scores = user_vector @ V @ V.T
+            
+        elif model_name == "ease":
+            # Логика EASE: scores = X_u @ B
+            scores = user_vector.astype(np.float32) @ self.ease_weights.astype(np.float32)
+        
+        # 3. Исключаем те фильмы, которые пользователь уже выбрал
+        scores[item_indices] = -np.inf
+        
+        # 4. Берем топ и декодируем обратно в ID фильмов
+        top_indices = np.argsort(scores)[::-1][:top_n]
+        recommendations = self.item_encoder.inverse_transform(top_indices)
+        
+        return recommendations.tolist()
