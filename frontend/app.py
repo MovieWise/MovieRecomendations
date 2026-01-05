@@ -56,29 +56,59 @@ with st.sidebar:
     
 # Основной интерфейс
 
+# Инициализируем session_state, если его еще нет
+if "final_ids" not in st.session_state:
+    st.session_state.final_ids = set()
+
 st.subheader("📝 Ваши предпочтения")
 
-# В реальном приложении здесь лучше загрузить список фильмов из БД/CSV
-# Для теста введем ID вручную или через удобный ввод
-movie_input = st.text_input(
-    "Введите ID фильмов через запятую:",
-    placeholder="Например: 1, 10, 550",
-    help="Введите ID из вашей базы данных (MovieLens или другой)"
-)
+@st.cache_data
+def get_data():
+    # Замените путь на ваш актуальный
+    links = pd.read_csv("../fastapi_recsys/recommendation_service/data/links.csv")
+    return links, links['title'].unique().tolist(), dict(zip(links['title'], links['movieId']))
+
+links, all_titles, movie_to_id = get_data()
+
+with st.form("movie_selection_form"):
+    col1, col2 = st.columns(2)
     
-    # Если хочешь сделать красиво, можно добавить multiselect, 
-    # если предварительно подгрузить список названий
-    # movies_list = [1, 2, 3, 10, 20...] 
-    # selected_ids = st.multiselect("Или выберите из списка:", movies_list)
+    with col1:
+        movie_input = st.text_input("Введите ID (через запятую):", placeholder="1, 10, 500")
+    
+    with col2:
+        selected_titles = st.multiselect("Выберите названия:", options=all_titles, max_selections=20)
+    
+    submit_button = st.form_submit_button("Подтвердить выбор")
+
+# Если нажата кнопка в форме — сохраняем результат в session_state
+if submit_button:
+    current_ids = set()
+    
+    if movie_input:
+        ids = [int(i.strip()) for i in movie_input.split(",") if i.strip().isdigit()]
+        current_ids.update(ids)
+    
+    if selected_titles:
+        current_ids.update([movie_to_id[t] for t in selected_titles])
+    
+    # Сохраняем в состояние сессии
+    st.session_state.final_ids = current_ids
+
+# Показываем таблицу, если в session_state есть ID
+if st.session_state.final_ids:
+    st.write(f"Выбрано ID: {len(st.session_state.final_ids)}")
+    selected_df = links[links['movieId'].isin(st.session_state.final_ids)][['movieId', 'title']]
+    st.table(selected_df)
 
 # Запрос к бэку
-if st.button("Сгенерировать рекомендации 🚀"):
-    if not movie_input:
+if st.button("Сгенерировать рекомендации"):
+    if not st.session_state.final_ids:
         st.warning("⚠️ Пожалуйста, введите хотя бы один ID фильма.")
     else:
         try:
             # Превращаем строку в список чисел
-            user_movie_ids = [int(x.strip()) for x in movie_input.split(",")]
+            user_movie_ids = list(st.session_state.final_ids)
             
             # Подготовка данных для отправки
             payload = {
