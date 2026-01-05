@@ -12,7 +12,15 @@ st.set_page_config(
 # Константы
 BACKEND_URL = "http://localhost:8000"
 
-# --- СТИЛИЗАЦИЯ ---
+# Movie imbd poster key
+# Here is your key: 335f100c
+# Please append it to all of your API requests,
+# OMDb API: http://www.omdbapi.com/?i=tt3896198&apikey=335f100c
+
+links = pd.read_csv("../fastapi_recsys/recommendation_service/data/links.csv")
+movie_to_imdb = links.set_index('movieId')['imdbId'].to_dict()
+
+# Стиль страницы
 st.markdown("""
     <style>
     .main {
@@ -28,11 +36,11 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- ЗАГОЛОВОК ---
+# Заголовок страницы
 st.title("🍿 Персональный подбор кино")
 st.markdown("Выберите модель и укажите фильмы, которые вам нравятся, чтобы получить рекомендации.")
 
-# --- БОКОВАЯ ПАНЕЛЬ (НАСТРОЙКИ) ---
+# Панель настроек
 with st.sidebar:
     st.header("⚙️ Настройки")
     
@@ -44,28 +52,26 @@ with st.sidebar:
     )
     
     # 2. Количество рекомендаций
-    top_n = st.slider("Количество фильмов:", 1, 20, 10)
+    top_n = st.slider("Количество фильмов:", 1, 10, 5)
     
-# --- ОСНОВНОЙ ИНТЕРФЕЙС ---
-col1, col2 = st.columns([1, 1])
+# Основной интерфейс
 
-with col1:
-    st.subheader("📝 Ваши предпочтения")
-    
-    # В реальном приложении здесь лучше загрузить список фильмов из БД/CSV
-    # Для теста введем ID вручную или через удобный ввод
-    movie_input = st.text_input(
-        "Введите ID фильмов через запятую:",
-        placeholder="Например: 1, 10, 550",
-        help="Введите ID из вашей базы данных (MovieLens или другой)"
-    )
+st.subheader("📝 Ваши предпочтения")
+
+# В реальном приложении здесь лучше загрузить список фильмов из БД/CSV
+# Для теста введем ID вручную или через удобный ввод
+movie_input = st.text_input(
+    "Введите ID фильмов через запятую:",
+    placeholder="Например: 1, 10, 550",
+    help="Введите ID из вашей базы данных (MovieLens или другой)"
+)
     
     # Если хочешь сделать красиво, можно добавить multiselect, 
     # если предварительно подгрузить список названий
     # movies_list = [1, 2, 3, 10, 20...] 
     # selected_ids = st.multiselect("Или выберите из списка:", movies_list)
 
-# --- ЛОГИКА ЗАПРОСА ---
+# Запрос к бэку
 if st.button("Сгенерировать рекомендации 🚀"):
     if not movie_input:
         st.warning("⚠️ Пожалуйста, введите хотя бы один ID фильма.")
@@ -87,26 +93,73 @@ if st.button("Сгенерировать рекомендации 🚀"):
                 if response.status_code == 200:
                     result = response.json()
                     
-                    # Переходим во вторую колонку для вывода
-                    with col2:
-                        st.subheader("🎯 Мы рекомендуем:")
-                        
-                        # Создаем таблицу для наглядности
-                        recs = result.get("recommendations", [])
-                        if recs:
-                            df = pd.DataFrame({
-                                "Место": range(1, len(recs) + 1),
-                                "ID фильма": recs
-                            })
-                            st.table(df)
-                            
-                            st.success(f"⏱ Время обработки: {result.get('processing_time', 0):.4f} сек.")
-                        else:
-                            st.write("Ничего не найдено :(")
-                else:
-                    st.error(f"Ошибка сервера: {response.status_code}")
-                    st.json(response.json())
+                    st.subheader("Мы рекомендуем:")
                     
+                    recs = result.get("recommendations", [])
+                    if recs:
+                        recs = {
+                            "Место": range(1, len(recs) + 1),
+                            "ID фильма": recs,
+                            "IMdBid": [movie_to_imdb.get(r) for r in recs] # Безопасное получение id
+                        }
+
+                        movie_details = []
+
+                        for imdb_id in recs["IMdBid"]:
+                            # Формируем ссылку. Важно: zfill(7) добавит нули, если ID короткий (напр. tt0111161)
+                            url = f"http://www.omdbapi.com/?i=tt{str(imdb_id).zfill(7)}&apikey=335f100c"
+                            
+                            try:
+                                response = requests.get(url)
+                                response.raise_for_status() # Проверка на ошибки (404, 500 и т.д.)
+                                
+                                data = response.json()
+                                
+                                if data.get("Response") == "True":
+                                    movie_details.append(data)
+                                else:
+                                    print(f"Ошибка OMDB для ID {imdb_id}: {data.get('Error')}")
+                                    
+                            except Exception as e:
+                                print(f"Ошибка сети: {e}")
+
+                    else:
+                        st.write("Ничего не найдено :(")
+                    
+                    left, center, right = st.columns([0.5, 2, 0.5])
+
+                    with center:
+                        for movie in movie_details:
+                            # Используем контейнер с рамкой
+                            with st.container(border=True):
+                                # Разделяем на колонку для постера и колонку для текста
+                                col1, col2 = st.columns([1, 2.5])
+                                
+                                with col1:
+                                    # Проверяем наличие постера (OMDb иногда возвращает "N/A")
+                                    poster_url = movie["Poster"] if movie["Poster"] != "N/A" else "https://via.placeholder.com/300x450?text=No+Poster"
+                                    st.image(poster_url, use_container_width=True)
+                                    
+                                with col2:
+                                    st.subheader(f"{movie['Title']} ({movie['Year']})")
+                                    
+                                    # Жанры в виде "тегов"
+                                    st.caption(f"🎭 {movie['Genre']}  •  ⏱️ {movie['Runtime']}")
+                                    
+                                    # Краткое описание
+                                    if movie.get("Plot") != "N/A":
+                                        st.write(f"_{movie['Plot']}_")
+                                    
+                                    # Метрики
+                                    m1, m2, m3 = st.columns(3)
+                                    m1.metric("Рейтинг", f"{movie['imdbRating']}")
+                                    m2.metric("Голоса", movie['imdbVotes'])
+                                    m3.metric("Metascore", movie.get('Metascore', 'N/A'))
+                                    
+                                    # Кнопка-ссылка на IMDb
+                                    imdb_id = movie.get('imdbID')
+                                    if imdb_id:
+                                        st.link_button("Открыть на IMDb", f"https://www.imdb.com/title/{imdb_id}")
         except ValueError:
             st.error("❌ Ошибка: Вводите только числа через запятую.")
         except Exception as e:
