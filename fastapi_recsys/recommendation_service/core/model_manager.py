@@ -157,8 +157,10 @@ class ModelManager:
     def predict_for_new_user(self, item_ids, model_name="puresvd", top_n=10):
         # 1. Превращаем внешние ID фильмов во внутренние индексы
         # Используем твой существующий item_encoder
-        item_indices = self.item_encoder.transform(item_ids)
-        
+        if model_name == "puresvd":
+            item_indices = self.item_encoder.transform(item_ids)
+        elif model_name == "ease":
+            item_indices = self.ease_item_encoder.transform(item_ids)
         # 2. Создаем вектор предпочтений (zeros)
         # Размер вектора = количеству всех фильмов в системе
         if model_name == "puresvd":
