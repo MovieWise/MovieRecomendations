@@ -227,7 +227,7 @@ async def predict_raw(
         raise HTTPException(status_code=400, detail="Эта модель не поддерживает raw-предикты")
 
     try:
-        # 2. Логика предсказания "на лету"
+        # 2. Логика предсказания
         # Передаем список ID напрямую в модель. 
         # Внутри модель должна построить вектор, где на позициях выбранных фильмов стоят 1
         recommendations = model_manager.predict_for_new_user(
@@ -238,7 +238,7 @@ async def predict_raw(
         
         processing_time = time.time() - start_time
         
-        # 3. Возвращаем результат (без сохранения в историю или с пометкой "new_user")
+        # 3. Возвращаем результат
         return ForwardResponse(
             success=True,
             recommendations=recommendations,

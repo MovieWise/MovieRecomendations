@@ -2,14 +2,14 @@ import streamlit as st
 import requests
 import pandas as pd
 
-# --- НАСТРОЙКИ ---
+# settings
 st.set_page_config(page_title="Movie RecSys", page_icon="🍿", layout="wide")
 
 BACKEND_URL = st.secrets.get("BACKEND_URL", "http://localhost:8000")
 OMDB_API_KEY = st.secrets.get("OMDB_API_KEY", "335f100c")
 LINKS_PATH = st.secrets.get("LINKS_PATH", "../fastapi_recsys/recommendation_service/data/links.csv")
 
-# --- ФУНКЦИИ ---
+# functions
 @st.cache_data
 def load_base_data():
     try:
@@ -57,7 +57,7 @@ def render_full_card(movie_data, pos=None):
             if movie_data.get("imdbID"):
                 st.link_button("Открыть на IMDb", f"https://www.imdb.com/title/{movie_data['imdbID']}", use_container_width=True)
 
-# --- ИНТЕРФЕЙС ---
+# ui
 st.title("🍿 Персональный подбор кино")
 
 with st.sidebar:
@@ -69,7 +69,7 @@ with st.sidebar:
     )
     top_n = st.slider("Количество рекомендаций:", 1, 15, 6)
 
-# Используем форму, чтобы избежать перезагрузки при первом клике
+# using form
 with st.form("main_search_form", border=False):
     col_left, col_right = st.columns([3, 2])
     
@@ -86,9 +86,9 @@ with st.form("main_search_form", border=False):
 
 current_ids = [movie_to_id[t] for t in selected_titles]
 
-# --- ЛОГИКА ОТОБРАЖЕНИЯ ---
+# display logic
 if not current_ids:
-    st.subheader("🔥 Популярно сейчас")
+    st.subheader("Популярные фильмы:")
     pop_ids = []
     try:
         resp = requests.post(f"{BACKEND_URL}/forward", json={"user_id": 28, "model": "mostpop", "top_n": 20}, timeout=2)

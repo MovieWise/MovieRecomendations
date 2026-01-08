@@ -125,7 +125,7 @@ class ModelManager:
         
         # Load encoders
         self.ease_user_encoder = joblib.load(os.path.join(data_dir, 'ease_user_encoder.joblib'))
-        self.ease_item_encoder = joblib.load(os.path.join(data_dir, 'item_encoder.joblib'))
+        self.ease_item_encoder = joblib.load(os.path.join(data_dir, 'ease_item_encoder.joblib'))
 
         print(f" EASE компоненты загружены успешно")
         return self
@@ -166,14 +166,13 @@ class ModelManager:
         if model_name == "puresvd":
             num_items = len(self.item_encoder.classes_)
         else:
-            num_items = 10000
+            num_items = len(self.ease_item_encoder.classes_)
         user_vector = np.zeros(num_items)
         user_vector[item_indices] = 1  # Ставим 1 там, где пользователю понравилось
         
         if model_name == "puresvd":
             # Логика PureSVD для нового вектора:
             # scores = (user_vector @ Vt.T) @ Vt
-            # Но у тебя есть Vt и S, можно сделать проще через проекцию:
             V = self.Vt.T
             scores = user_vector @ V @ V.T
             
@@ -186,6 +185,9 @@ class ModelManager:
         
         # 4. Берем топ и декодируем обратно в ID фильмов
         top_indices = np.argsort(scores)[::-1][:top_n]
-        recommendations = self.item_encoder.inverse_transform(top_indices)
+        if model_name == "puresvd":
+            recommendations = self.item_encoder.inverse_transform(top_indices)
+        else:
+            recommendations = self.ease_item_encoder.inverse_transform(top_indices)
         
         return recommendations.tolist()
