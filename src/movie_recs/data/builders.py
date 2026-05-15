@@ -38,10 +38,16 @@ def build_interaction_matrix(
     user_col: str = "user_idx",
     item_col: str = "item_idx",
     value_col: str = "rating",
+    n_users: int | None = None,
+    n_items: int | None = None,
 ) -> csr_matrix:
     """Build a CSR user-item matrix."""
+    if frame.empty:
+        return csr_matrix((n_users or 0, n_items or 0))
+    row_count = n_users if n_users is not None else frame[user_col].max() + 1
+    # Keep one extra item slot by default for compatibility with unknown-item padding.
+    col_count = n_items if n_items is not None else frame[item_col].max() + 2
     return csr_matrix(
         (frame[value_col], (frame[user_col], frame[item_col])),
-        shape=(frame[user_col].max() + 1, frame[item_col].max() + 1),
+        shape=(row_count, col_count),
     )
-

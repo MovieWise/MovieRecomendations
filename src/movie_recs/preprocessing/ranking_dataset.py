@@ -39,16 +39,20 @@ class RankingDatasetBuilder:
         result = frame.copy()
         for col in ["age", "runtimeMinutes", "num_translations"]:
             if col in result.columns:
-                result[col] = result[col].fillna(result[col].median())
+                median = result[col].median()
+                result[col] = result[col].fillna(0 if pd.isna(median) else median)
         if "cluster" in result.columns:
-            result["cluster"] = result["cluster"].fillna(result["cluster"].mode().iloc[0])
+            mode = result["cluster"].mode(dropna=True)
+            result["cluster"] = result["cluster"].fillna(0 if mode.empty else mode.iloc[0])
         if "main_region" in result.columns:
             result["main_region"] = result["main_region"].fillna("UNKNOWN")
         if "is_multiregional" in result.columns:
             result["is_multiregional"] = result["is_multiregional"].apply(lambda value: 0 if value == 0.0 else int(bool(value)))
         result["has_director"] = result.get("director_name", pd.Series(index=result.index)).notna().astype(int)
-        result["main_genre"] = result["genres"].apply(parse_list_string)
-        actor_first = result["actors_list"].apply(parse_list_string)
+        genres = result.get("genres", pd.Series(index=result.index, dtype=object))
+        result["main_genre"] = genres.apply(parse_list_string)
+        actors = result.get("actors_list", pd.Series(index=result.index, dtype=object))
+        actor_first = actors.apply(parse_list_string)
         actor_counts = actor_first.value_counts()
         result["main_actor_popularity"] = actor_first.map(lambda value: actor_counts.get(value, 0))
         return result
@@ -74,4 +78,3 @@ class RankingDatasetBuilder:
         if truth_items is not None:
             result = self.build_labels(result, truth_items)
         return result
-
