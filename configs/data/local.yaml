@@ -1,0 +1,12 @@
+name: local_data
+family: data
+model_name: prep
+data:
+  ratings: data/raw/ratings.csv
+  movies: data/raw/movies.csv
+  links: data/raw/links.csv
+  tags: data/raw/tags.csv
+  content: data/processed/content.parquet
+  hybrid_table: data/processed/hybrid_train.csv
+  artifacts_root: artifacts
+

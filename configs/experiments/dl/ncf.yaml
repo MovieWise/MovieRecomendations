@@ -1,0 +1,22 @@
+name: ncf_experiment
+family: dl
+model_name: ncf
+seed: 42
+split_strategy: temporal
+split_params:
+  cutoff: 1514764800
+model_params:
+  n_factors: 32
+  hidden_dim: 128
+training_params:
+  batch_size: 2048
+  epochs: 3
+  lr: 0.001
+evaluation_params:
+  k_ndcg: 10
+  k_prec: 15
+  k_rec: 50
+data:
+  ratings: data/raw/ratings.csv
+  artifacts_root: artifacts
+

@@ -1,0 +1,18 @@
+name: puresvd_baseline
+family: base
+model_name: puresvd
+seed: 42
+split_strategy: temporal
+split_params:
+  cutoff: 1514764800
+model_params:
+  n_factors: 50
+training_params: {}
+evaluation_params:
+  k_ndcg: 15
+  k_prec: 15
+  k_rec: 50
+data:
+  ratings: data/raw/ratings.csv
+  artifacts_root: artifacts
+
