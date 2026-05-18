@@ -2,9 +2,18 @@ import pandas as pd
 from scipy.sparse import csr_matrix
 
 from movie_recs.models.baselines import ModifiedTopPopularRecommender, TopPopularRecommender
+from movie_recs.models.hybrid_rankers import LightGBMHybridRanker
 from movie_recs.models.linear import EASERecommender
 from movie_recs.models.matrix_factorization import PureSVDRecommender
+from movie_recs.utils.io import save_pickle
 from movie_recs.preprocessing.ranking_dataset import RankingDatasetBuilder
+
+
+class FakeRawRanker:
+    feature_name_ = ["score", "rating"]
+
+    def predict(self, frame):
+        return [0.5] * len(frame)
 
 
 def test_top_popular_filters_seen_items():
@@ -59,3 +68,10 @@ def test_ranking_dataset_builder():
     assert result.loc[0, "main_genre"] == "Comedy"
     assert result.loc[0, "label"] == 1
 
+
+def test_lightgbm_ranker_load_wraps_raw_predictor(tmp_path):
+    path = tmp_path / "raw_ranker.pkl"
+    save_pickle(FakeRawRanker(), path)
+    ranker = LightGBMHybridRanker.load(path)
+    assert ranker.model is not None
+    assert ranker.feature_names == ["score", "rating"]

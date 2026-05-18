@@ -46,8 +46,13 @@ class HybridInferenceService:
         return not self._missing_artifacts
 
     def _ensure_loaded(self) -> None:
-        if self.ease_weights is not None or self._missing_artifacts:
+        if self.ease_weights is not None and self.item_encoder is not None and self.ranker is not None:
             return
+        if self._missing_artifacts:
+            return
+        self.ease_weights = None
+        self.item_encoder = None
+        self.ranker = None
         ease_item_encoder_path = self.artifacts.ease_item_encoder_path
         legacy_item_encoder_path = str(Path(ease_item_encoder_path).with_name("item_encoder.joblib"))
         if not Path(ease_item_encoder_path).exists() and Path(legacy_item_encoder_path).exists():
@@ -60,9 +65,25 @@ class HybridInferenceService:
         self._missing_artifacts = [path for path in required if not Path(path).exists()]
         if self._missing_artifacts:
             return
-        self.ease_weights = np.load(self.artifacts.ease_weights_path)
-        self.item_encoder = joblib.load(ease_item_encoder_path)
-        self.ranker = LightGBMHybridRanker.load(self.artifacts.lgbm_ranker_path)
+        try:
+            self.ease_weights = np.load(self.artifacts.ease_weights_path)
+            self.item_encoder = joblib.load(ease_item_encoder_path)
+            self.ranker = LightGBMHybridRanker.load(self.artifacts.lgbm_ranker_path)
+            if self.ranker.model is None:
+                self.ease_weights = None
+                self.item_encoder = None
+                self.ranker = None
+                self._missing_artifacts = [f"invalid_ranker:{self.artifacts.lgbm_ranker_path}"]
+        except ModuleNotFoundError as exc:
+            self.ease_weights = None
+            self.item_encoder = None
+            self.ranker = None
+            self._missing_artifacts = [f"python_dependency:{exc.name}"]
+        except OSError as exc:
+            self.ease_weights = None
+            self.item_encoder = None
+            self.ranker = None
+            self._missing_artifacts = [f"native_dependency:{exc}"]
 
     def recommend(
         self,
@@ -75,6 +96,8 @@ class HybridInferenceService:
         self._ensure_loaded()
         if self._missing_artifacts:
             raise ModelUnavailableError(self._missing_artifacts)
+        if self.ease_weights is None or self.item_encoder is None or self.ranker is None:
+            raise ModelUnavailableError(["model_not_loaded"])
         if not liked_movie_ids:
             return []
 
@@ -106,6 +129,9 @@ class HybridInferenceService:
         for name in DEFAULT_RANKING_FEATURES:
             if name not in frame.columns:
                 frame[name] = "UNKNOWN" if name in {"main_genre", "main_region"} else 0
+        for name in ["main_genre", "main_region"]:
+            if name in frame.columns:
+                frame[name] = frame[name].astype("category")
         return frame
 
     def _ensure_feature_inputs(self, frame: pd.DataFrame) -> pd.DataFrame:

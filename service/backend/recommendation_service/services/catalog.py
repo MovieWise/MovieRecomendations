@@ -100,7 +100,7 @@ class MovieCatalogService:
     def feed(self, excluded_movie_ids: set[int], limit: int) -> list[int]:
         if self.movies.empty or "movieId" not in self.movies.columns:
             return []
-        movie_ids = self.movies["movieId"].dropna().astype(int).tolist()
+        movie_ids = self._default_feed_movie_ids()
         result: list[int] = []
         for movie_id in movie_ids:
             if movie_id in excluded_movie_ids:
@@ -109,6 +109,18 @@ class MovieCatalogService:
             if len(result) >= limit:
                 break
         return result
+
+    def _default_feed_movie_ids(self) -> list[int]:
+        if not self.content.empty and {"movieId", "popularity"}.issubset(self.content.columns):
+            return (
+                self.content[["movieId", "popularity"]]
+                .dropna(subset=["movieId"])
+                .sort_values(["popularity", "movieId"], ascending=[False, True])
+                ["movieId"]
+                .astype(int)
+                .tolist()
+            )
+        return self.movies["movieId"].dropna().astype(int).tolist()
 
     def search(self, query: str, excluded_movie_ids: set[int] | None = None, limit: int = 20) -> list[int]:
         if self.movies.empty or "movieId" not in self.movies.columns:

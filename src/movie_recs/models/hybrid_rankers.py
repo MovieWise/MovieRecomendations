@@ -66,8 +66,17 @@ class LightGBMHybridRanker:
 
     @classmethod
     def load(cls, path: str | Path) -> "LightGBMHybridRanker":
+        loaded = load_pickle(path)
+        if isinstance(loaded, cls):
+            return loaded
+        if hasattr(loaded, "predict") or hasattr(loaded, "predict_proba"):
+            feature_names = getattr(loaded, "feature_name_", None)
+            if feature_names is None and hasattr(loaded, "booster_"):
+                feature_names = loaded.booster_.feature_name()
+            return cls(feature_names=list(feature_names or DEFAULT_RANKING_FEATURES), model=loaded)
         model = cls(feature_names=list(DEFAULT_RANKING_FEATURES))
-        model.__dict__.update(load_pickle(path))
+        for key, value in loaded.items():
+            setattr(model, key, value)
         return model
 
 
@@ -94,6 +103,10 @@ class CatBoostHybridRanker:
 
     @classmethod
     def load(cls, path: str | Path) -> "CatBoostHybridRanker":
+        loaded = load_pickle(path)
+        if isinstance(loaded, cls):
+            return loaded
         model = cls(feature_names=list(DEFAULT_RANKING_FEATURES))
-        model.__dict__.update(load_pickle(path))
+        for key, value in loaded.items():
+            setattr(model, key, value)
         return model

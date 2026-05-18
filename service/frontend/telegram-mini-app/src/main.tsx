@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   authenticate,
@@ -55,9 +55,9 @@ function MovieTile({
   );
 }
 
-function RecommendationRow({ movie }: { movie: MovieInfo }) {
+function RecommendationRow({ movie, onOpen }: { movie: MovieInfo; onOpen: (movie: MovieInfo) => void }) {
   return (
-    <article className="recommendation-row">
+    <button className="recommendation-row" onClick={() => onOpen(movie)} type="button">
       <div className="row-poster">
         {movie.poster ? <img src={movie.poster} alt="" /> : <span>{movie.title?.slice(0, 1) ?? "M"}</span>}
       </div>
@@ -72,7 +72,46 @@ function RecommendationRow({ movie }: { movie: MovieInfo }) {
         <p>{[movie.year, movie.runtime, movie.genre].filter(Boolean).join(" · ")}</p>
         {movie.plot && <p className="plot">{movie.plot}</p>}
       </div>
-    </article>
+    </button>
+  );
+}
+
+function MovieDetailModal({ movie, onClose }: { movie: MovieInfo; onClose: () => void }) {
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={movie.title ?? "Фильм"}>
+      <section className="movie-modal">
+        <button className="modal-close" onClick={onClose} aria-label="Закрыть" type="button">×</button>
+        <div className="modal-poster">
+          {movie.poster ? <img src={movie.poster} alt="" /> : <div className="poster-empty">{movie.title?.slice(0, 1) ?? "M"}</div>}
+        </div>
+        <div className="modal-body">
+          {movie.rating && movie.rating !== "N/A" && (
+            <div className="imdb-rating modal-rating" aria-label={`IMDb ${movie.rating}`}>
+              <span className="rating-star filled">★</span>
+              <strong>{movie.rating}</strong>
+            </div>
+          )}
+          <h2>{movie.title ?? "Без названия"}</h2>
+          <p className="modal-meta">{[movie.year, movie.runtime, movie.genre].filter(Boolean).join(" · ")}</p>
+          {movie.plot && <p className="modal-plot">{movie.plot}</p>}
+          <dl className="modal-facts">
+            {movie.director && (
+              <>
+                <dt>Режиссёр</dt>
+                <dd>{movie.director}</dd>
+              </>
+            )}
+            {movie.actors && (
+              <>
+                <dt>В ролях</dt>
+                <dd>{movie.actors}</dd>
+              </>
+            )}
+          </dl>
+          {movie.imdb_url && <a className="imdb-link" href={movie.imdb_url}>Открыть IMDb</a>}
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -129,10 +168,13 @@ function App() {
   const [movies, setMovies] = useState<MovieInfo[]>([]);
   const [profile, setProfile] = useState<ProfileResponse | null>(null);
   const [recommendations, setRecommendations] = useState<MovieInfo[]>([]);
+  const [recommendationsCollapsed, setRecommendationsCollapsed] = useState(false);
+  const [selectedMovie, setSelectedMovie] = useState<MovieInfo | null>(null);
   const [query, setQuery] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("catalog");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const recommendationsRef = useRef<HTMLElement | null>(null);
 
   const ratedCount = useMemo(() => (profile ? profile.liked_count + profile.disliked_count : 0), [profile]);
 
@@ -219,6 +261,10 @@ function App() {
     try {
       const result = await generateRecommendations(token, 10);
       setRecommendations(result.recommendations);
+      setRecommendationsCollapsed(false);
+      window.setTimeout(() => {
+        recommendationsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 50);
     } catch (err) {
       setError(normalizeError(err));
       setState("error");
@@ -294,6 +340,36 @@ function App() {
         </div>
       </section>
 
+      <section
+        ref={recommendationsRef}
+        className={recommendations.length > 0 ? "recommendation-panel has-results" : "recommendation-panel"}
+      >
+        <div className="panel-head">
+          <div>
+            <span className="section-label">EASE + LightGBM</span>
+            <h2>Персональные рекомендации</h2>
+          </div>
+          {recommendations.length > 0 && (
+            <button className="panel-toggle" onClick={() => setRecommendationsCollapsed((value) => !value)} type="button">
+              {recommendationsCollapsed ? "Показать" : "Скрыть"}
+            </button>
+          )}
+        </div>
+        {recommendations.length > 0 && recommendationsCollapsed ? (
+          <p className="panel-empty">{recommendations.length} рекомендаций скрыто.</p>
+        ) : recommendations.length > 0 ? (
+          <div className="recommendation-list">
+            {recommendations.map((movie) => (
+              <RecommendationRow key={movie.movie_id} movie={movie} onOpen={setSelectedMovie} />
+            ))}
+          </div>
+        ) : (
+          <p className="panel-empty">
+            {busy ? "Считаем рекомендации..." : "Оцените несколько фильмов и нажмите “Рекомендации”."}
+          </p>
+        )}
+      </section>
+
       {viewMode === "catalog" ? (
         <section className="catalog-grid" aria-busy={busy}>
           {movies.map((movie) => (
@@ -321,22 +397,7 @@ function App() {
           <p>Найдите фильмы в каталоге и отметьте, понравились они вам или нет.</p>
         </section>
       )}
-
-      <section className="recommendation-panel">
-        <div className="panel-head">
-          <div>
-            <span className="section-label">EASE + LightGBM</span>
-            <h2>Персональные рекомендации</h2>
-          </div>
-        </div>
-        {recommendations.length > 0 ? (
-          <div className="recommendation-list">
-            {recommendations.map((movie) => <RecommendationRow key={movie.movie_id} movie={movie} />)}
-          </div>
-        ) : (
-          <p className="panel-empty">Оцените несколько фильмов и нажмите “Получить”.</p>
-        )}
-      </section>
+      {selectedMovie && <MovieDetailModal movie={selectedMovie} onClose={() => setSelectedMovie(null)} />}
     </main>
   );
 }

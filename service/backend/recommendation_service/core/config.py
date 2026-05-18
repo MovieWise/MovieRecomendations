@@ -33,7 +33,10 @@ class Settings:
     omdb_cache_ttl_seconds: int = int(os.getenv("OMDB_CACHE_TTL_SECONDS", "604800"))
     movies_path: str = _path_env("MOVIES_PATH", "service/backend/recommendation_service/data/links.csv")
     links_path: str = _path_env("LINKS_PATH", "service/backend/recommendation_service/data/links.csv")
-    content_features_path: str = _path_env("CONTENT_FEATURES_PATH", "data/processed/content.parquet")
+    content_features_path: str = _path_env(
+        "CONTENT_FEATURES_PATH",
+        "service/backend/recommendation_service/data/content.parquet",
+    )
     ease_weights_path: str = _path_env(
         "EASE_WEIGHTS_PATH",
         "service/backend/recommendation_service/data/ease_weights_f16.npy",
@@ -52,7 +55,7 @@ class Settings:
     )
     lgbm_ranker_path: str = _path_env(
         "LGBM_RANKER_PATH",
-        "artifacts/ease_lgb_ranker/model/ranker.pkl",
+        "service/backend/recommendation_service/data/LightGBMHybridRanker.pkl",
     )
 
 
