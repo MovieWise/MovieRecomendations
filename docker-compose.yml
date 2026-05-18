@@ -1,0 +1,31 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: service/backend/Dockerfile
+    env_file:
+      - service/backend/recommendation_service/.env
+    environment:
+      PYTHONPATH: /app/src:/app/service/backend
+      DATABASE_URL: sqlite:////app/service/backend/recommendation_service/data/database.db
+    volumes:
+      - ./service/backend/recommendation_service/data:/app/service/backend/recommendation_service/data
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health', timeout=3).read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  frontend:
+    build:
+      context: service/frontend/telegram-mini-app
+      dockerfile: Dockerfile
+    environment:
+      VITE_API_BASE_URL: /api/v1
+      VITE_BACKEND_PROXY_TARGET: http://backend:8000
+    depends_on:
+      - backend
+    ports:
+      - "5173:5173"

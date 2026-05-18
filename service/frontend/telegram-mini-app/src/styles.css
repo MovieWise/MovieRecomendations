@@ -147,6 +147,31 @@ h2 {
   font-weight: 700;
 }
 
+.feed-summary {
+  margin: 4px 0 14px;
+  border: 1px solid #d9e5dc;
+  border-radius: 8px;
+  padding: 12px;
+  background: #ffffff;
+  box-shadow: 0 10px 24px rgba(42, 74, 58, 0.07);
+}
+
+.feed-summary span {
+  display: block;
+  margin-bottom: 4px;
+  color: #23815a;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.feed-summary p {
+  color: #6d746f;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
 .catalog-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -167,6 +192,24 @@ h2 {
   aspect-ratio: 2 / 3;
   width: 100%;
   background: #e7ece7;
+}
+
+.poster-button,
+.title-button {
+  display: block;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  text-align: left;
+  background: transparent;
+}
+
+.poster-button {
+  cursor: zoom-in;
+}
+
+.title-button {
+  width: 100%;
 }
 
 .poster img {

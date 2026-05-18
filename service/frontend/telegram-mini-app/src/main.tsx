@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   authenticate,
@@ -22,17 +22,19 @@ function normalizeError(error: unknown) {
 function MovieTile({
   movie,
   onReact,
+  onOpen,
   busy
 }: {
   movie: MovieInfo;
   onReact: (movieId: number, reaction: Reaction) => void;
+  onOpen: (movie: MovieInfo) => void;
   busy: boolean;
 }) {
   return (
     <article className="movie-tile">
-      <div className="poster">
+      <button className="poster poster-button" onClick={() => onOpen(movie)} type="button">
         {movie.poster ? <img src={movie.poster} alt="" /> : <div className="poster-empty">{movie.title?.slice(0, 1) ?? "M"}</div>}
-      </div>
+      </button>
       <div className="tile-body">
         {movie.rating && movie.rating !== "N/A" && (
           <div className="imdb-rating" aria-label={`IMDb ${movie.rating}`}>
@@ -40,7 +42,9 @@ function MovieTile({
             <strong>{movie.rating}</strong>
           </div>
         )}
-        <h3>{movie.title ?? "Без названия"}</h3>
+        <button className="title-button" onClick={() => onOpen(movie)} type="button">
+          <h3>{movie.title ?? "Без названия"}</h3>
+        </button>
         <p>{[movie.year, movie.genre?.split(",")[0]].filter(Boolean).join(" · ")}</p>
       </div>
       <div className="tile-actions">
@@ -52,27 +56,6 @@ function MovieTile({
         </button>
       </div>
     </article>
-  );
-}
-
-function RecommendationRow({ movie, onOpen }: { movie: MovieInfo; onOpen: (movie: MovieInfo) => void }) {
-  return (
-    <button className="recommendation-row" onClick={() => onOpen(movie)} type="button">
-      <div className="row-poster">
-        {movie.poster ? <img src={movie.poster} alt="" /> : <span>{movie.title?.slice(0, 1) ?? "M"}</span>}
-      </div>
-      <div>
-        <h3>{movie.title ?? "Без названия"}</h3>
-        {movie.rating && movie.rating !== "N/A" && (
-          <div className="imdb-rating row-rating" aria-label={`IMDb ${movie.rating}`}>
-            <span className="rating-star filled">★</span>
-            <strong>{movie.rating}</strong>
-          </div>
-        )}
-        <p>{[movie.year, movie.runtime, movie.genre].filter(Boolean).join(" · ")}</p>
-        {movie.plot && <p className="plot">{movie.plot}</p>}
-      </div>
-    </button>
   );
 }
 
@@ -167,16 +150,20 @@ function App() {
   const [state, setState] = useState<AppState>("boot");
   const [movies, setMovies] = useState<MovieInfo[]>([]);
   const [profile, setProfile] = useState<ProfileResponse | null>(null);
-  const [recommendations, setRecommendations] = useState<MovieInfo[]>([]);
-  const [recommendationsCollapsed, setRecommendationsCollapsed] = useState(false);
   const [selectedMovie, setSelectedMovie] = useState<MovieInfo | null>(null);
   const [query, setQuery] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("catalog");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const recommendationsRef = useRef<HTMLElement | null>(null);
 
   const ratedCount = useMemo(() => (profile ? profile.liked_count + profile.disliked_count : 0), [profile]);
+  const queryText = query.trim();
+  const feedTitle = queryText ? "Результаты поиска" : ratedCount > 0 ? "Рекомендации для вас" : "Популярные фильмы";
+  const feedSubtitle = queryText
+    ? "Выберите фильмы, которые уже смотрели."
+    : ratedCount > 0
+      ? "Лента пересчитывается по вашим оценкам."
+      : "Холодный старт: начните с популярных фильмов.";
 
   useEffect(() => {
     const webApp = window.Telegram?.WebApp;
@@ -190,8 +177,8 @@ function App() {
     authenticate(initData)
       .then(async (auth) => {
         setToken(auth.access_token);
-        const [feed, nextProfile] = await Promise.all([loadFeed(auth.access_token, 24), loadProfile(auth.access_token)]);
-        setMovies(feed.movies);
+        const nextProfile = await loadProfile(auth.access_token);
+        await loadMainFeed(auth.access_token, nextProfile, "");
         setProfile(nextProfile);
         setState("catalog");
       })
@@ -201,13 +188,29 @@ function App() {
       });
   }, []);
 
+  async function loadMainFeed(accessToken: string, nextProfile: ProfileResponse | null, currentQuery = query) {
+    const normalizedQuery = currentQuery.trim();
+    if (normalizedQuery) {
+      const result = await searchMovies(accessToken, normalizedQuery, 24);
+      setMovies(result.movies);
+      return;
+    }
+    const nextRatedCount = nextProfile ? nextProfile.liked_count + nextProfile.disliked_count : 0;
+    if (nextRatedCount > 0) {
+      const result = await generateRecommendations(accessToken, 24);
+      setMovies(result.recommendations);
+      return;
+    }
+    const result = await loadFeed(accessToken, 24);
+    setMovies(result.movies);
+  }
+
   useEffect(() => {
-    if (!token || state !== "catalog") return;
+    if (!token || state !== "catalog" || viewMode !== "catalog") return;
     const timeout = window.setTimeout(async () => {
       setBusy(true);
       try {
-        const result = query.trim() ? await searchMovies(token, query, 24) : await loadFeed(token, 24);
-        setMovies(result.movies);
+        await loadMainFeed(token, profile, query);
       } catch (err) {
         setError(normalizeError(err));
       } finally {
@@ -215,19 +218,16 @@ function App() {
       }
     }, 280);
     return () => window.clearTimeout(timeout);
-  }, [query, token, state]);
+  }, [query, token, state, viewMode]);
 
   async function react(movieId: number, reaction: Reaction) {
     if (!token) return;
     setBusy(true);
     try {
       await saveReaction(token, movieId, reaction);
-      const [nextProfile, nextMovies] = await Promise.all([
-        loadProfile(token),
-        query.trim() ? searchMovies(token, query, 24) : loadFeed(token, 24)
-      ]);
+      const nextProfile = await loadProfile(token);
       setProfile(nextProfile);
-      setMovies(nextMovies.movies);
+      await loadMainFeed(token, nextProfile, query);
     } catch (err) {
       setError(normalizeError(err));
       setState("error");
@@ -241,12 +241,9 @@ function App() {
     setBusy(true);
     try {
       await deleteReaction(token, movieId);
-      const [nextProfile, nextMovies] = await Promise.all([
-        loadProfile(token),
-        query.trim() ? searchMovies(token, query, 24) : loadFeed(token, 24)
-      ]);
+      const nextProfile = await loadProfile(token);
       setProfile(nextProfile);
-      setMovies(nextMovies.movies);
+      await loadMainFeed(token, nextProfile, query);
     } catch (err) {
       setError(normalizeError(err));
       setState("error");
@@ -255,16 +252,11 @@ function App() {
     }
   }
 
-  async function generate() {
-    if (!token) return;
+  async function refreshFeed() {
+    if (!token || !profile) return;
     setBusy(true);
     try {
-      const result = await generateRecommendations(token, 10);
-      setRecommendations(result.recommendations);
-      setRecommendationsCollapsed(false);
-      window.setTimeout(() => {
-        recommendationsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }, 50);
+      await loadMainFeed(token, profile, query);
     } catch (err) {
       setError(normalizeError(err));
       setState("error");
@@ -310,10 +302,10 @@ function App() {
       <header className="header">
         <div>
           <span className="brand">MovieRecs</span>
-          <h1>Что вы уже смотрели?</h1>
+          <h1>{feedTitle}</h1>
         </div>
-        <button className="button primary top-cta" onClick={generate} disabled={busy || ratedCount === 0}>
-          Рекомендации
+        <button className="button primary top-cta" onClick={refreshFeed} disabled={busy}>
+          Обновить
         </button>
       </header>
 
@@ -340,40 +332,15 @@ function App() {
         </div>
       </section>
 
-      <section
-        ref={recommendationsRef}
-        className={recommendations.length > 0 ? "recommendation-panel has-results" : "recommendation-panel"}
-      >
-        <div className="panel-head">
-          <div>
-            <span className="section-label">EASE + LightGBM</span>
-            <h2>Персональные рекомендации</h2>
-          </div>
-          {recommendations.length > 0 && (
-            <button className="panel-toggle" onClick={() => setRecommendationsCollapsed((value) => !value)} type="button">
-              {recommendationsCollapsed ? "Показать" : "Скрыть"}
-            </button>
-          )}
-        </div>
-        {recommendations.length > 0 && recommendationsCollapsed ? (
-          <p className="panel-empty">{recommendations.length} рекомендаций скрыто.</p>
-        ) : recommendations.length > 0 ? (
-          <div className="recommendation-list">
-            {recommendations.map((movie) => (
-              <RecommendationRow key={movie.movie_id} movie={movie} onOpen={setSelectedMovie} />
-            ))}
-          </div>
-        ) : (
-          <p className="panel-empty">
-            {busy ? "Считаем рекомендации..." : "Оцените несколько фильмов и нажмите “Рекомендации”."}
-          </p>
-        )}
+      <section className="feed-summary">
+        <span>{ratedCount > 0 && !queryText ? "EASE + LightGBM" : "Каталог"}</span>
+        <p>{busy ? "Обновляем ленту..." : feedSubtitle}</p>
       </section>
 
       {viewMode === "catalog" ? (
         <section className="catalog-grid" aria-busy={busy}>
           {movies.map((movie) => (
-            <MovieTile key={movie.movie_id} movie={movie} onReact={react} busy={busy} />
+            <MovieTile key={movie.movie_id} movie={movie} onReact={react} onOpen={setSelectedMovie} busy={busy} />
           ))}
         </section>
       ) : (

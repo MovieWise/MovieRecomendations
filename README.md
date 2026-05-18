@@ -1,12 +1,6 @@
-# 🎬 MovieRecs — Гибридная рекомендательная система фильмов
+# MovieRecs - гибридная рекомендательная система фильмов
 
-## 📖 Описание проекта
-Этот проект посвящён разработке рекомендательной системы для фильмов на основе пользовательских предпочтений и метаданных о фильмах.  
-В отличие от классических решений, основанных только на рейтингах, в данном проекте реализован **гибридный подход**, объединяющий:  
-- **коллаборативную фильтрацию** (рекомендации на основе истории просмотров и оценок пользователей),  
-- **контентные признаки** фильмов (жанры, актёры, описания, год выпуска, бюджет и т.д.).  
-
-Такой метод позволяет повысить точность рекомендаций и решать проблему **холодного старта**.  
+MovieRecs - проект рекомендательной системы фильмов с ML-ядром, FastAPI backend, Telegram Mini App frontend и legacy Streamlit-интерфейсом. Основной пользовательский сценарий: пользователь открывает Telegram Mini App, отмечает просмотренные фильмы лайком или дизлайком, а приложение строит персональную ленту рекомендаций через гибридную модель `EASE + LightGBM`.
 
 ---
 
@@ -37,155 +31,240 @@
 
 ---
 
-## 🛠️ Методы и модели
+## Архитектура
 
-### 🔹 Базовые модели
-- **Популярность** (Top-N фильмов)  
-- **User-based Collaborative Filtering**  
-- **Item-based Collaborative Filtering**  
+- `src/movie_recs` - reusable ML-пакет: подготовка данных, модели, метрики, обучение и inference.
+- `service/backend/recommendation_service` - FastAPI backend с API `/api/v1`.
+- `service/frontend/telegram-mini-app` - React, TypeScript и Vite frontend для Telegram Mini App.
+- `service/frontend/app.py` - legacy Streamlit UI, оставлен для совместимости.
+- `service/backend/recommendation_service/data` - локальная папка для CSV, parquet, SQLite DB и model artifacts. Эти файлы не коммитятся.
 
-### 🔹 Продвинутые модели
-- **Matrix Factorization (ALS, SVD)**  
-- **LightFM** (гибридная модель)  
-- **Neural Collaborative Filtering (NCF)**  
+Backend разделен по слоям:
 
-### 🔹 Гибридная система
-- Объединение факторов пользователей и признаков фильмов  
-- Векторизация описаний фильмов (**TF-IDF / Word2Vec / BERT**)  
-- Совмещение с матричной факторизацией для финального ранжирования  
+- `api/routers` - HTTP endpoints.
+- `schemas` - Pydantic request и response модели.
+- `services` - бизнес-логика каталога, реакций, OMDb и рекомендаций.
+- `repositories` - SQLAlchemy доступ к пользователям, реакциям и OMDb cache.
+- `ml` - загрузка артефактов и inference `EASE + LightGBM`.
+- `clients` - внешние API clients.
+- `core` - config, logging и security.
 
----
+## Основные возможности
 
-## 📊 Метрики оценки
-Для оценки качества моделей используются метрики ранжирования:  
-- **Precision@K**  
-- **Recall@K**  
-- **Mean Average Precision (MAP)**  
-- **Normalized Discounted Cumulative Gain (NDCG)**  
+- Авторизация Telegram Mini App через проверку Telegram WebApp init data.
+- JWT для защищенных backend endpoints.
+- Каталог популярных фильмов для холодного старта.
+- Поиск фильмов по названию.
+- Сохранение лайков и дизлайков с возможностью перезаписи и удаления оценки.
+- Автоматическая персональная лента рекомендаций после появления пользовательских оценок.
+- OMDb-обогащение карточек: poster, title, year, genre, plot, rating, runtime, director, actors, imdbID.
+- Кэширование OMDb-ответов в базе.
+- Legacy Streamlit endpoints сохранены.
 
----
-
-## 💻 Визуализация и интерфейс
-Для демонстрации работы системы будет создано простое веб-приложение на **Streamlit**, где пользователь сможет:  
-- выбрать любимые фильмы,  
-- получить персонализированные рекомендации.  
-
----
-
-## 🚀 План проекта
-1. 📂 Сбор и предобработка данных  
-2. 📊 Разведочный анализ данных (EDA)  
-3. 🔧 Реализация базовых моделей  
-4. ⚡ Реализация продвинутых методов (ALS, LightFM, NCF)  
-5. 🔗 Построение гибридной системы  
-6. 📈 Оценка качества и сравнение подходов  
-7. 🎨 Визуализация и веб-приложение  
-8. 📝 Подготовка итогового отчёта  
-
----
-
-## 📌 Итог
-Проект продемонстрирует, как можно строить **гибридные рекомендательные системы для фильмов**, объединяя пользовательские рейтинги и контентные данные. Такой подход позволяет достигать более высокой точности и делать рекомендации релевантными даже для **новых фильмов** или пользователей с небольшой историей.  
-
----
-
-## Telegram Mini App
-
-В репозитории добавлен production-oriented Telegram Mini App, который живёт рядом с legacy Streamlit-интерфейсом и переиспользует ML-код из `src/movie_recs`.
-
-### Backend
-
-Новый FastAPI backend расположен в `service/backend/recommendation_service` и разделён по слоям:
-
-- `api/routers` — HTTP endpoints `/api/v1`;
-- `schemas` — Pydantic-схемы;
-- `services` — бизнес-логика профиля, OMDB, каталога и рекомендаций;
-- `repositories` — SQLAlchemy-доступ к пользователям, реакциям, OMDB cache и истории;
-- `ml` — inference `EASE + LightGBM`;
-- `clients` — внешний OMDB client;
-- `core` — config и security.
+## Backend API
 
 Основные endpoints:
 
-- `POST /api/v1/auth/telegram`
-- `GET /api/v1/movies/feed`
-- `GET /api/v1/movies/search?q=...`
-- `POST /api/v1/reactions`
-- `DELETE /api/v1/reactions/{movie_id}`
-- `GET /api/v1/profile/ratings`
-- `POST /api/v1/recommendations/generate`
-- `GET /api/v1/movies/{movie_id}`
-- `GET /api/v1/health`
+- `POST /api/v1/auth/telegram` - проверка Telegram init data и выдача JWT.
+- `GET /api/v1/movies/feed` - фильмы для оценки, исключая уже оцененные.
+- `GET /api/v1/movies/search?q=...` - поиск по каталогу.
+- `GET /api/v1/movies/{movie_id}` - подробная карточка фильма.
+- `POST /api/v1/reactions` - создать или обновить лайк/дизлайк.
+- `DELETE /api/v1/reactions/{movie_id}` - удалить оценку.
+- `GET /api/v1/profile/ratings` - список пользовательских оценок.
+- `POST /api/v1/recommendations/generate` - сгенерировать рекомендации.
+- `GET /api/v1/health` - проверка API, конфигурации, БД и ML-артефактов.
 
-Legacy endpoints `/forward`, `/predict_raw` и `/history` сохранены для текущего Streamlit-приложения.
+Legacy endpoints `/forward`, `/predict_raw`, `/history` и `/stats` сохранены для Streamlit.
 
-### Environment variables
+## Данные и артефакты
 
-Пример находится в `service/backend/recommendation_service/.env.example`.
+Для каталога и холодного старта нужен файл:
 
-Обязательные для Telegram Mini App:
+- `service/backend/recommendation_service/data/links.csv`
 
-- `TELEGRAM_BOT_TOKEN`
-- `JWT_SECRET`
-- `DATABASE_URL`
-- `OMDB_API_KEY`
-- `MOVIES_PATH`
-- `LINKS_PATH`
-- `CONTENT_FEATURES_PATH`
-- `EASE_WEIGHTS_PATH`
-- `EASE_ITEM_ENCODER_PATH`
-- `EASE_USER_ENCODER_PATH`
-- `EASE_INTERACTIONS_PATH`
-- `LGBM_RANKER_PATH`
+Ожидаемые колонки для каталога:
 
-Если артефакты `EASE + LightGBM` отсутствуют, `/api/v1/health` покажет `model_available=false`, а генерация вернёт `model_unavailable` без скрытого fallback на другую модель.
+- `movieId`
+- `imdbId`
+- `title`
 
-### Артефакты для рекомендаций
+Для рекомендаций через `EASE + LightGBM` нужны:
 
-Для отображения каталога достаточно `service/backend/recommendation_service/data/links.csv` с колонками `movieId`, `imdbId`, `title`.
+- `service/backend/recommendation_service/data/ease_weights_f16.npy`
+- `service/backend/recommendation_service/data/ease_item_encoder.joblib`
+- `service/backend/recommendation_service/data/ease_interaction_matrix.npz`
+- `service/backend/recommendation_service/data/LightGBMHybridRanker.pkl`
+- `service/backend/recommendation_service/data/content.parquet`
 
-Для генерации рекомендаций через `EASE + LightGBM` нужны:
+Дополнительно поддерживаются legacy-имена и артефакты:
 
-- `EASE_WEIGHTS_PATH` — `ease_weights_f16.npy`;
-- `EASE_ITEM_ENCODER_PATH` — `ease_item_encoder.joblib` или legacy `item_encoder.joblib`;
-- `EASE_INTERACTIONS_PATH` — `ease_interaction_matrix.npz`;
-- `LGBM_RANKER_PATH` — pickle-файл `LightGBMHybridRanker`;
-- `CONTENT_FEATURES_PATH` — `content.parquet` или `.csv` с признаками для reranking.
+- `service/backend/recommendation_service/data/item_encoder.joblib`
+- `service/backend/recommendation_service/data/ease_user_encoder.joblib`
+- `service/backend/recommendation_service/data/puresvd_data.pkl`
+- `service/backend/recommendation_service/data/mostpop_data.pkl`
 
-`EASE_USER_ENCODER_PATH` нужен для совместимости и health/config, но текущий Telegram flow строит профиль нового пользователя по лайкам и использует item encoder.
+Если обязательные ML-артефакты отсутствуют, healthcheck покажет, что модель недоступна, а endpoint рекомендаций вернет понятную ошибку `model_unavailable`.
 
-### Запуск backend
+## Переменные окружения backend
+
+Скопируйте пример:
+
+```bash
+cp service/backend/recommendation_service/.env.example service/backend/recommendation_service/.env
+```
+
+Заполните значения:
+
+```env
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+JWT_SECRET=change-me-long-random-secret
+JWT_TTL_SECONDS=604800
+TELEGRAM_AUTH_MAX_AGE_SECONDS=86400
+
+DATABASE_URL=sqlite:///./service/backend/recommendation_service/data/database.db
+
+OMDB_API_KEY=your_omdb_api_key
+OMDB_BASE_URL=https://www.omdbapi.com/
+OMDB_CACHE_TTL_SECONDS=604800
+
+MOVIES_PATH=service/backend/recommendation_service/data/links.csv
+LINKS_PATH=service/backend/recommendation_service/data/links.csv
+CONTENT_FEATURES_PATH=service/backend/recommendation_service/data/content.parquet
+
+EASE_WEIGHTS_PATH=service/backend/recommendation_service/data/ease_weights_f16.npy
+EASE_ITEM_ENCODER_PATH=service/backend/recommendation_service/data/ease_item_encoder.joblib
+EASE_USER_ENCODER_PATH=service/backend/recommendation_service/data/ease_user_encoder.joblib
+EASE_INTERACTIONS_PATH=service/backend/recommendation_service/data/ease_interaction_matrix.npz
+LGBM_RANKER_PATH=service/backend/recommendation_service/data/LightGBMHybridRanker.pkl
+```
+
+Для Telegram Mini App ключ OMDb должен быть только в backend environment. Frontend не должен получать `OMDB_API_KEY`.
+
+## Переменные окружения frontend
+
+Пример находится в `service/frontend/telegram-mini-app/.env.example`.
+
+```env
+VITE_API_BASE_URL=/api/v1
+VITE_BACKEND_PROXY_TARGET=http://localhost:8000
+VITE_TELEGRAM_INIT_DATA=
+```
+
+`VITE_TELEGRAM_INIT_DATA` нужен только для локального smoke-теста в браузере вне Telegram.
+
+## Запуск без Docker
+
+Установите Python-зависимости:
 
 ```bash
 pip install -r requirements.txt
 pip install -r service/backend/requirements312.txt
-export PYTHONPATH="$PWD/src:$PWD/service/backend"
-uvicorn recommendation_service.api.main:app --reload --app-dir service/backend
 ```
 
-### Telegram frontend
+Подготовьте backend environment и запустите FastAPI:
 
-React + TypeScript + Vite приложение находится в `service/frontend/telegram-mini-app`.
+```bash
+set -a
+source service/backend/recommendation_service/.env
+set +a
+export PYTHONPATH="$PWD/src:$PWD/service/backend"
+uvicorn recommendation_service.api.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+Проверьте backend:
+
+```bash
+curl http://localhost:8000/api/v1/health
+```
+
+Запустите Telegram Mini App frontend:
 
 ```bash
 cd service/frontend/telegram-mini-app
 npm install
-VITE_API_BASE_URL=/api/v1 npm run dev
+npm run dev
 ```
 
-Для локального smoke-теста вне Telegram можно передать `VITE_TELEGRAM_INIT_DATA`, сгенерированный под ваш `TELEGRAM_BOT_TOKEN`.
+Откройте `http://localhost:5173`.
 
-Для теста через Telegram с одним бесплатным ngrok-туннелем поднимайте туннель только на Vite:
+## Локальный smoke-тест без Telegram
+
+Нужно сгенерировать `VITE_TELEGRAM_INIT_DATA` тем же `TELEGRAM_BOT_TOKEN`, который указан в backend `.env`.
+
+```bash
+python - <<'PY'
+import hashlib
+import hmac
+import json
+import os
+import time
+import urllib.parse
+
+bot_token = os.environ["TELEGRAM_BOT_TOKEN"]
+user = {
+    "id": 100001,
+    "first_name": "Local",
+    "last_name": "Tester",
+    "username": "local_tester",
+    "language_code": "ru",
+}
+params = {
+    "query_id": "local-smoke",
+    "user": json.dumps(user, separators=(",", ":")),
+    "auth_date": str(int(time.time())),
+}
+data_check_string = "\n".join(f"{key}={value}" for key, value in sorted(params.items()))
+secret_key = hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()
+params["hash"] = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
+print(urllib.parse.urlencode(params))
+PY
+```
+
+Затем перезапустите Vite с этим значением:
+
+```bash
+cd service/frontend/telegram-mini-app
+VITE_API_BASE_URL=/api/v1 VITE_TELEGRAM_INIT_DATA='generated_init_data_here' npm run dev
+```
+
+## Запуск через Docker Compose
+
+Перед запуском создайте backend `.env` и положите data/model artifacts в `service/backend/recommendation_service/data`.
+
+```bash
+cp service/backend/recommendation_service/.env.example service/backend/recommendation_service/.env
+docker compose up --build
+```
+
+После запуска:
+
+- backend: `http://localhost:8000/api/v1/health`
+- frontend: `http://localhost:5173`
+
+Compose запускает frontend как Vite dev server. Vite проксирует `/api/*` в контейнер `backend:8000`, поэтому frontend использует `VITE_API_BASE_URL=/api/v1`.
+
+## Запуск в Telegram через один ngrok tunnel
+
+Запустите backend и frontend локально или через Docker Compose.
+
+Откройте один tunnel только на Vite:
 
 ```bash
 ngrok http 5173
 ```
 
-Vite проксирует `/api/*` в локальный backend на `http://localhost:8000`, поэтому второй tunnel для backend не нужен.
+В BotFather укажите HTTPS URL из ngrok как Web App или Menu Button URL. Backend наружу отдельно открывать не нужно: Telegram открывает frontend, а Vite dev server проксирует `/api/*` во внутренний backend.
 
-### Legacy Streamlit
+Для Telegram-сценария:
 
-Streamlit-прототип сохранён в `service/frontend/app.py`.
+- `TELEGRAM_BOT_TOKEN` в backend `.env` должен совпадать с токеном вашего бота.
+- `VITE_TELEGRAM_INIT_DATA` не нужен.
+- `OMDB_API_KEY` остается только в backend `.env`.
+
+## Legacy Streamlit
+
+Streamlit-прототип расположен в `service/frontend/app.py`.
 
 ```bash
 streamlit run service/frontend/app.py
@@ -193,10 +272,55 @@ streamlit run service/frontend/app.py
 
 Локальный файл `service/frontend/.streamlit/secrets.toml` не должен попадать в GitHub. Используйте `service/frontend/.streamlit/secrets.example.toml` как шаблон.
 
-### Проверка
+## Тесты и проверки
+
+Backend и ML tests:
 
 ```bash
 pytest -q
 ```
 
-На текущем наборе тестов ожидается зелёный прогон; deep-тесты могут быть skipped, если опциональные DL-зависимости не установлены.
+Frontend build:
+
+```bash
+cd service/frontend/telegram-mini-app
+npm run build
+```
+
+Docker Compose config:
+
+```bash
+docker compose config
+```
+
+Полезная ручная проверка:
+
+- открыть Telegram Mini App или локальный smoke-тест;
+- авторизоваться через Telegram init data;
+- найти фильм;
+- поставить лайк или дизлайк;
+- открыть список оценок;
+- удалить оценку;
+- проверить, что после оценок главная лента показывает персональные рекомендации;
+- открыть подробную карточку рекомендованного фильма.
+
+## GitHub-памятка
+
+Не коммитьте:
+
+- `.env` и `.env.*`, кроме `.env.example`;
+- `service/frontend/.streamlit/secrets.toml`;
+- SQLite DB;
+- CSV, parquet и model artifacts;
+- `node_modules`;
+- frontend `dist`;
+- Python caches и virtualenv.
+
+Коммитьте:
+
+- исходный код;
+- тесты;
+- Dockerfile и `docker-compose.yml`;
+- `.env.example`;
+- `secrets.example.toml`;
+- документацию.

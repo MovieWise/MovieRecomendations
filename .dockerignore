@@ -1,20 +1,22 @@
-# Python
+.git
+.gitignore
 __pycache__/
-*.pyc
+*.py[cod]
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
 .DS_Store
 
-# Virtual env
 venv/
 .venv/
 .env
 .env.*
-!.env.example
 !**/.env.example
 
-# Data / models
+node_modules/
+dist/
+coverage/
+
 *.db
 *.pkl
 *.joblib
@@ -27,11 +29,4 @@ data/raw/
 data/processed/
 service/backend/recommendation_service/data/
 
-# Frontend
-node_modules/
-dist/
-coverage/
-
-# Local secrets
 service/frontend/.streamlit/secrets.toml
-!**/secrets.example.toml
