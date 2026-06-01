@@ -75,3 +75,15 @@ def test_lightgbm_ranker_load_wraps_raw_predictor(tmp_path):
     ranker = LightGBMHybridRanker.load(path)
     assert ranker.model is not None
     assert ranker.feature_names == ["score", "rating"]
+
+
+def test_lightgbm_ranker_save_load_roundtrip_with_slots(tmp_path):
+    path = tmp_path / "wrapped_ranker.pkl"
+    ranker = LightGBMHybridRanker(feature_names=["score", "rating"], model=FakeRawRanker())
+    ranker.save(path)
+
+    loaded = LightGBMHybridRanker.load(path)
+
+    assert loaded.feature_names == ["score", "rating"]
+    assert loaded.model is not None
+    assert loaded.predict_scores(pd.DataFrame({"score": [1.0], "rating": [4.0]})).tolist() == [0.5]

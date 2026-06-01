@@ -7,7 +7,7 @@ from typing import Any
 
 import yaml
 
-from movie_recs.config.schemas import ArtifactBundle, DataPaths, ExperimentConfig
+from movie_recs.config.schemas import ArtifactBundle, DataPaths, ExperimentConfig, TrackingConfig
 
 
 def _read_yaml(path: str | Path) -> dict[str, Any]:
@@ -22,6 +22,7 @@ def load_experiment_config(path: str | Path) -> ExperimentConfig:
     """Load an experiment config from YAML."""
     payload = _read_yaml(path)
     data_payload = payload.get("data", {})
+    tracking_payload = payload.get("tracking", {})
     artifacts_payload = payload.get("artifacts")
 
     config = ExperimentConfig(
@@ -35,6 +36,7 @@ def load_experiment_config(path: str | Path) -> ExperimentConfig:
         training_params=payload.get("training_params", {}),
         evaluation_params=payload.get("evaluation_params", {}),
         data=DataPaths(**data_payload),
+        tracking=TrackingConfig(**tracking_payload),
         artifacts=ArtifactBundle(**artifacts_payload) if artifacts_payload else None,
     )
     return config.with_default_artifacts()
