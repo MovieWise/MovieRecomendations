@@ -4,6 +4,8 @@ from scipy.sparse import load_npz
 import numpy as np
 import joblib
 
+DEFAULT_DATA_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data"))
+
 class ModelManager:
     def __init__(self):
         self.user_encoder = None
@@ -26,7 +28,7 @@ class ModelManager:
     def load_mostpop(self):
         """Load data for mostpop model"""
         # Path to data file
-        data_path = os.path.join('data', 'mostpop_data.pkl')
+        data_path = os.path.join(os.getenv("MODEL_DATA_DIR", DEFAULT_DATA_DIR), 'mostpop_data.pkl')
         
         # Load data
         with open(data_path, 'rb') as f:
@@ -69,7 +71,7 @@ class ModelManager:
         }
     
     def load_puresvd(self):
-        data_path = os.path.join('data', 'puresvd_data.pkl')
+        data_path = os.path.join(os.getenv("MODEL_DATA_DIR", DEFAULT_DATA_DIR), 'puresvd_data.pkl')
         with open(data_path, 'rb') as f:
             puresvd_data = pickle.load(f)
         
@@ -115,7 +117,7 @@ class ModelManager:
 
     def load_ease(self):
         """Load data for EASE"""
-        data_dir = 'data'
+        data_dir = os.getenv("MODEL_DATA_DIR", DEFAULT_DATA_DIR)
         
         # Load weights matrix B
         self.ease_weights = np.load(os.path.join(data_dir, 'ease_weights_f16.npy'))

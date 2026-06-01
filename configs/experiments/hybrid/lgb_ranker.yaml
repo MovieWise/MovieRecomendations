@@ -1,0 +1,22 @@
+name: ease_lgb_ranker
+family: hybrid
+model_name: ease
+seed: 42
+split_strategy: group
+split_params:
+  test_size: 0.25
+model_params:
+  reg_weight: 100.0
+training_params:
+  candidate_top_k: 100
+  ranker: lgbm
+evaluation_params:
+  k_ndcg: 10
+  k_prec: 15
+  k_rec: 50
+data:
+  ratings: data/raw/ratings.csv
+  content: data/processed/content.parquet
+  hybrid_table: data/processed/hybrid_train.csv
+  artifacts_root: artifacts
+

@@ -1,0 +1,20 @@
+name: bert4rec_experiment
+family: dl
+model_name: bert4rec
+seed: 42
+split_strategy: temporal
+split_params:
+  cutoff: 1514764800
+model_params:
+  max_seq_length: 100
+training_params:
+  batch_size: 256
+  epochs: 10
+  lr: 0.001
+evaluation_params:
+  k_ndcg: 10
+  k_prec: 15
+  k_rec: 50
+data:
+  ratings: data/raw/ratings.csv
+  artifacts_root: artifacts

@@ -6,7 +6,7 @@ import pandas as pd
 st.set_page_config(page_title="Movie RecSys", page_icon="🍿", layout="wide")
 
 BACKEND_URL = st.secrets.get("BACKEND_URL", "http://localhost:8000")
-OMDB_API_KEY = st.secrets.get("OMDB_API_KEY", "335f100c")
+OMDB_API_KEY = st.secrets.get("OMDB_API_KEY", "")
 LINKS_PATH = st.secrets.get("LINKS_PATH", "../fastapi_recsys/recommendation_service/data/links.csv")
 
 # functions
@@ -26,6 +26,8 @@ links, movie_to_imdb, all_titles, movie_to_id = load_base_data()
 
 @st.cache_data(show_spinner=False)
 def get_movie_info(movie_id):
+    if not OMDB_API_KEY:
+        return None
     imdb_id = movie_to_imdb.get(movie_id)
     if not imdb_id: return None
     url = f"http://www.omdbapi.com/?i=tt{str(imdb_id).zfill(7)}&apikey={OMDB_API_KEY}"

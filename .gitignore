@@ -1,14 +1,37 @@
 # Python
 __pycache__/
 *.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.DS_Store
 
 # Virtual env
 venv/
+.venv/
 .env
+.env.*
+!.env.example
+!**/.env.example
 
 # Data / models
 *.db
 *.pkl
 *.joblib
 *.npy
+*.npz
 *.csv
+*.parquet
+artifacts/
+data/raw/
+data/processed/
+service/backend/recommendation_service/data/
+
+# Frontend
+node_modules/
+dist/
+coverage/
+
+# Local secrets
+service/frontend/.streamlit/secrets.toml
+!**/secrets.example.toml
