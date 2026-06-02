@@ -23,6 +23,20 @@ export PYTHONPATH="$PWD/src"
 
 ## Запуск обучения
 
+Для текущего PRD-конфига нужны:
+
+- `data/processed/hybrid_train.parquet` - train/validation candidates;
+- `data/processed/hybrid_test.parquet` - final test candidates;
+- `data/raw/ratings.csv` - история пользователя для leakage-free счетчиков жанра, региона и кластера.
+
+`ratings.csv` должен содержать колонки `userId`, `movieId`, `rating`, `timestamp`. Если нужно временно запустить старый feature set без пользовательских счетчиков, поставьте в `configs/experiments/hybrid/lgb_ranker.yaml`:
+
+```yaml
+training_params:
+  user_counter_features:
+    enabled: false
+```
+
 Если Docker не установлен, сначала можно проверить сам training без MLflow. В этом режиме артефакты сохранятся локально в `artifacts/`, но не попадут в MLflow/MinIO:
 
 ```bash

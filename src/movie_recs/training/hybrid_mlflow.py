@@ -37,6 +37,21 @@ PRD_FEATURES = [
     "main_genre",
     "main_region",
     "main_actor_popularity",
+    "user_main_genre_count",
+    "user_main_genre_share",
+    "user_main_region_count",
+    "user_main_region_share",
+    "user_cluster_count",
+    "user_cluster_share",
+]
+
+USER_COUNTER_FEATURES = [
+    "user_main_genre_count",
+    "user_main_genre_share",
+    "user_main_region_count",
+    "user_main_region_share",
+    "user_cluster_count",
+    "user_cluster_share",
 ]
 
 
@@ -141,6 +156,162 @@ def _split_ratings_temporally(ratings: pd.DataFrame, cutoff_date: str) -> tuple[
     return train[train["userId"].isin(included)].copy(), test[test["userId"].isin(included)].copy()
 
 
+def _user_counter_params(config: ExperimentConfig) -> dict[str, Any]:
+    return dict(config.training_params.get("user_counter_features", {}))
+
+
+def _user_counter_features_enabled(config: ExperimentConfig) -> bool:
+    return bool(_user_counter_params(config).get("enabled", False))
+
+
+def _features_required_before_user_counters(config: ExperimentConfig) -> list[str]:
+    return [feature for feature in _feature_names(config) if feature not in USER_COUNTER_FEATURES]
+
+
+def _build_item_metadata_frame(*frames: pd.DataFrame) -> pd.DataFrame:
+    columns = ["movieId", "main_genre", "main_region", "cluster"]
+    available_frames = [frame[[col for col in columns if col in frame.columns]].copy() for frame in frames if frame is not None and not frame.empty]
+    if not available_frames:
+        return pd.DataFrame(columns=columns)
+    metadata = pd.concat(available_frames, ignore_index=True)
+    for col in columns:
+        if col not in metadata.columns:
+            metadata[col] = np.nan
+    metadata["main_genre"] = metadata["main_genre"].astype("object").where(metadata["main_genre"].notna(), "UNKNOWN")
+    metadata["main_region"] = metadata["main_region"].astype("object").where(metadata["main_region"].notna(), "UNKNOWN")
+    metadata["cluster"] = pd.to_numeric(metadata["cluster"], errors="coerce").fillna(-1).astype(float)
+    return metadata.dropna(subset=["movieId"]).drop_duplicates("movieId")[columns]
+
+
+def _filter_relevant_history(
+    ratings: pd.DataFrame,
+    *,
+    cutoff_date: str,
+    min_rating: float,
+    user_ids: set[int] | None = None,
+) -> pd.DataFrame:
+    required = {"userId", "movieId", "rating", "timestamp"}
+    missing = required - set(ratings.columns)
+    if missing:
+        raise ValueError(f"ratings history is missing required columns: {sorted(missing)}")
+    result = ratings.copy()
+    if user_ids is not None:
+        result = result[result["userId"].isin(user_ids)]
+    cutoff_ts = pd.Timestamp(cutoff_date).timestamp()
+    timestamps = pd.to_numeric(result["timestamp"], errors="coerce")
+    ratings_numeric = pd.to_numeric(result["rating"], errors="coerce")
+    result = result[(timestamps < cutoff_ts) & (ratings_numeric >= min_rating)].copy()
+    return result[["userId", "movieId", "rating", "timestamp"]]
+
+
+def _add_dimension_counter_features(
+    frame: pd.DataFrame,
+    history: pd.DataFrame,
+    dimension_col: str,
+    prefix: str,
+) -> pd.DataFrame:
+    result = frame.copy()
+    count_col = f"{prefix}_count"
+    share_col = f"{prefix}_share"
+    total_col = f"{prefix}_total"
+    if history.empty or dimension_col not in history.columns:
+        result[count_col] = 0.0
+        result[share_col] = 0.0
+        return result
+
+    history_dim = history[["userId", dimension_col]].copy()
+    frame_dim = result[["userId", dimension_col]].copy()
+    if dimension_col in {"main_genre", "main_region"}:
+        history_dim[dimension_col] = history_dim[dimension_col].astype("object").where(history_dim[dimension_col].notna(), "UNKNOWN")
+        frame_dim[dimension_col] = frame_dim[dimension_col].astype("object").where(frame_dim[dimension_col].notna(), "UNKNOWN")
+    else:
+        history_dim[dimension_col] = pd.to_numeric(history_dim[dimension_col], errors="coerce").fillna(-1).astype(float)
+        frame_dim[dimension_col] = pd.to_numeric(frame_dim[dimension_col], errors="coerce").fillna(-1).astype(float)
+    result[dimension_col] = frame_dim[dimension_col]
+
+    counts = history_dim.groupby(["userId", dimension_col]).size().reset_index(name=count_col)
+    totals = history_dim.groupby("userId").size().reset_index(name=total_col)
+    result = result.merge(counts, on=["userId", dimension_col], how="left")
+    result = result.merge(totals, on="userId", how="left")
+    result[count_col] = result[count_col].fillna(0).astype(float)
+    result[total_col] = result[total_col].fillna(0).astype(float)
+    result[share_col] = np.divide(
+        result[count_col],
+        result[total_col],
+        out=np.zeros(len(result), dtype=float),
+        where=result[total_col].to_numpy() > 0,
+    )
+    return result.drop(columns=[total_col])
+
+
+def add_user_counter_features(
+    frame: pd.DataFrame,
+    ratings: pd.DataFrame,
+    item_metadata: pd.DataFrame,
+    *,
+    cutoff_date: str = "2018-01-01",
+    min_rating: float = 3.0,
+) -> pd.DataFrame:
+    """Add leakage-free user profile counters from historical ratings."""
+    if frame.empty:
+        result = frame.copy()
+        for feature in USER_COUNTER_FEATURES:
+            result[feature] = 0.0
+        return result
+    users = {int(user_id) for user_id in frame["userId"].dropna().unique()}
+    history = _filter_relevant_history(ratings, cutoff_date=cutoff_date, min_rating=min_rating, user_ids=users)
+    metadata = item_metadata[["movieId", "main_genre", "main_region", "cluster"]].copy()
+    history = history.merge(metadata, on="movieId", how="inner")
+    result = _add_dimension_counter_features(frame, history, "main_genre", "user_main_genre")
+    result = _add_dimension_counter_features(result, history, "main_region", "user_main_region")
+    result = _add_dimension_counter_features(result, history, "cluster", "user_cluster")
+    for feature in USER_COUNTER_FEATURES:
+        result[feature] = pd.to_numeric(result[feature], errors="coerce").fillna(0.0)
+    return result
+
+
+def _apply_user_counter_features(
+    config: ExperimentConfig,
+    frame: pd.DataFrame,
+    external_test: pd.DataFrame | None,
+) -> tuple[pd.DataFrame, pd.DataFrame | None, dict[str, Any]]:
+    params = _user_counter_params(config)
+    ratings_path = _resolve_path(config.data.ratings)
+    if not ratings_path.exists():
+        raise FileNotFoundError(
+            "User counter features are enabled, but ratings history is missing: "
+            f"{ratings_path}. Put ratings.csv there or set training_params.user_counter_features.enabled=false."
+        )
+    ratings = _read_table(ratings_path)
+    cutoff_date = str(params.get("cutoff_date", config.split_params.get("cutoff_date", "2018-01-01")))
+    min_rating = float(params.get("min_rating", 3.0))
+    item_metadata = _build_item_metadata_frame(frame, external_test if external_test is not None else pd.DataFrame())
+    enriched_frame = add_user_counter_features(
+        frame,
+        ratings,
+        item_metadata,
+        cutoff_date=cutoff_date,
+        min_rating=min_rating,
+    )
+    enriched_test = None
+    if external_test is not None:
+        enriched_test = add_user_counter_features(
+            external_test,
+            ratings,
+            item_metadata,
+            cutoff_date=cutoff_date,
+            min_rating=min_rating,
+        )
+    metadata = {
+        "user_counter_features_enabled": True,
+        "user_counter_min_rating": min_rating,
+        "user_counter_cutoff_date": cutoff_date,
+        "user_counter_ratings_path": str(ratings_path),
+        "user_counter_metadata_items": int(item_metadata["movieId"].nunique()) if "movieId" in item_metadata.columns else 0,
+    }
+    return enriched_frame, enriched_test, metadata
+
+
 def build_hybrid_training_frame(config: ExperimentConfig, limit_users: int | None = None) -> tuple[pd.DataFrame, dict[str, Any]]:
     """Build a reranking table from local raw and processed data."""
     ratings = _read_table(config.data.ratings)
@@ -224,7 +395,7 @@ def _load_or_build_frame(config: ExperimentConfig, limit_users: int | None = Non
         metadata = {"hybrid_table": str(hybrid_path), "candidate_rows": len(frame)}
         if "label" not in frame.columns:
             raise ValueError(f"{hybrid_path} exists but does not contain label column.")
-        if all(col in frame.columns for col in _feature_names(config)):
+        if all(col in frame.columns for col in _features_required_before_user_counters(config)):
             return frame, metadata
         return RankingDatasetBuilder(feature_names=tuple(_feature_names(config))).build(frame), metadata
     return build_hybrid_training_frame(config, limit_users=limit_users)
@@ -242,7 +413,7 @@ def _prepare_cached_hybrid_frame(
         frame = frame[frame["userId"].isin(selected_users)].copy()
     if "label" not in frame.columns:
         raise ValueError(f"{resolved} exists but does not contain label column.")
-    if not all(col in frame.columns for col in _feature_names(config)):
+    if not all(col in frame.columns for col in _features_required_before_user_counters(config)):
         frame = RankingDatasetBuilder(feature_names=tuple(_feature_names(config))).build(frame)
     metadata = {
         "hybrid_table": str(resolved),
@@ -277,7 +448,10 @@ def _load_train_and_test_frames(
 
 def _feature_names(config: ExperimentConfig) -> list[str]:
     configured = config.training_params.get("features")
-    return list(configured or PRD_FEATURES)
+    features = list(configured or PRD_FEATURES)
+    if not _user_counter_features_enabled(config):
+        features = [feature for feature in features if feature not in USER_COUNTER_FEATURES]
+    return features
 
 
 def _split_train_validation_frame(config: ExperimentConfig, frame: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -528,6 +702,9 @@ def train_prd_hybrid_ranker(
     config = config.with_default_artifacts()
     feature_names = _feature_names(config)
     frame, external_test, metadata = _load_train_and_test_frames(config, limit_users=limit_users)
+    if _user_counter_features_enabled(config):
+        frame, external_test, counter_metadata = _apply_user_counter_features(config, frame, external_test)
+        metadata.update(counter_metadata)
     if external_test is None:
         train, val, test = _split_ranker_frame(config, frame)
     else:
