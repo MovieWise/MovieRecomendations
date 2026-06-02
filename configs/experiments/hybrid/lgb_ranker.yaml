@@ -44,8 +44,8 @@ training_params:
     - user_cluster_count
     - user_cluster_share
 evaluation_params:
-  k_ndcg: 10
-  k_prec: 15
+  k_ndcg: 50
+  k_prec: 50
   k_rec: 50
 data:
   ratings: data/raw/ratings.csv

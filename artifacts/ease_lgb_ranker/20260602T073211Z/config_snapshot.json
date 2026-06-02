@@ -1,0 +1,82 @@
+{
+  "name": "ease_lgb_ranker",
+  "family": "hybrid",
+  "model_name": "ease",
+  "seed": 42,
+  "split_strategy": "temporal",
+  "split_params": {
+    "cutoff_date": "2018-01-01",
+    "test_size": 0.25
+  },
+  "model_params": {
+    "reg_weight": 100.0
+  },
+  "training_params": {
+    "candidate_top_k": 100,
+    "ease_top_items": 25000,
+    "validation_size": 0.2,
+    "ranker": "lgbm",
+    "ranker_params": {
+      "objective": "lambdarank",
+      "n_estimators": 500,
+      "max_depth": 3,
+      "learning_rate": 0.1,
+      "random_state": 42,
+      "n_jobs": -1,
+      "verbose": -1
+    },
+    "user_counter_features": {
+      "enabled": true,
+      "min_rating": 3.0
+    },
+    "features": [
+      "score",
+      "popularity",
+      "age",
+      "rating",
+      "runtimeMinutes",
+      "num_translations",
+      "cluster",
+      "has_director",
+      "num_interactions",
+      "main_genre",
+      "main_region",
+      "main_actor_popularity",
+      "user_main_genre_count",
+      "user_main_genre_share",
+      "user_main_region_count",
+      "user_main_region_share",
+      "user_cluster_count",
+      "user_cluster_share"
+    ]
+  },
+  "evaluation_params": {
+    "k_ndcg": 50,
+    "k_prec": 50,
+    "k_rec": 50
+  },
+  "data": {
+    "ratings": "data/raw/ratings.csv",
+    "movies": "data/raw/movies.csv",
+    "links": "data/raw/links.csv",
+    "tags": "data/raw/tags.csv",
+    "content": "data/processed/content.parquet",
+    "hybrid_table": "data/processed/hybrid_train.parquet",
+    "hybrid_test_table": "data/processed/hybrid_test.parquet",
+    "artifacts_root": "artifacts"
+  },
+  "tracking": {
+    "experiment_name": "movie-recs-prd",
+    "registered_model_name": "MovieRecs_EASE_LGB_Ranker",
+    "prd_tag": "PRD",
+    "tracking_uri": null
+  },
+  "artifacts": {
+    "root": "artifacts/ease_lgb_ranker",
+    "model_dir": "artifacts/ease_lgb_ranker/model",
+    "encoder_dir": "artifacts/ease_lgb_ranker/encoders",
+    "feature_dir": "artifacts/ease_lgb_ranker/features",
+    "metrics_dir": "artifacts/ease_lgb_ranker/metrics",
+    "plots_dir": "artifacts/ease_lgb_ranker/plots"
+  }
+}
