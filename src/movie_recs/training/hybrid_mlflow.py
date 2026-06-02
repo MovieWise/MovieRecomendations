@@ -22,7 +22,11 @@ from movie_recs.models.hybrid_rankers import LightGBMHybridRanker, get_ease_cand
 from movie_recs.models.linear import EASERecommender
 from movie_recs.preprocessing.ranking_dataset import RankingDatasetBuilder
 from movie_recs.utils.io import ensure_dir, save_joblib, save_json
+import matplotlib
 
+matplotlib.use("Agg")
+
+import matplotlib.pyplot as plt
 
 PRD_FEATURES = [
     "score",
@@ -114,9 +118,23 @@ def _flatten_mapping(payload: Mapping[str, Any], prefix: str = "") -> dict[str, 
 def _log_metric_safe(mlflow: Any, name: str, value: float | None) -> None:
     if value is None:
         return
-    numeric = float(value)
-    if np.isfinite(numeric):
-        mlflow.log_metric(name, numeric)
+
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return
+
+    if not np.isfinite(numeric):
+        return
+
+    safe_name = (
+        str(name)
+        .replace("@", "_at_")
+        .replace(":", "_")
+        .replace(",", "_")
+    )
+
+    mlflow.log_metric(safe_name, numeric)
 
 
 def _prepare_movies_features(ratings: pd.DataFrame, movies: pd.DataFrame, content: pd.DataFrame) -> pd.DataFrame:
@@ -652,9 +670,32 @@ def _log_to_mlflow(
     except ImportError as exc:
         raise RuntimeError("Install mlflow and boto3 to log the PRD experiment.") from exc
 
+    def log_param_once(key: str, value: Any) -> None:
+        key = str(key)[:250]
+
+        if not isinstance(value, (str, int, float, bool)):
+            return
+
+        value = str(value)
+
+        try:
+            mlflow.log_param(key, value)
+        except Exception:
+            # Если такой param уже был залогирован в этом run,
+            # логируем его как duplicate с другим ключом.
+            duplicate_key = f"{key}_duplicate"[:250]
+            mlflow.log_param(duplicate_key, value)
+
     if config.tracking.tracking_uri:
         mlflow.set_tracking_uri(config.tracking.tracking_uri)
+
     mlflow.set_experiment(os.getenv("MLFLOW_EXPERIMENT_NAME", config.tracking.experiment_name))
+
+    os.environ.pop("MLFLOW_RUN_ID", None)
+
+    if mlflow.active_run() is not None:
+        mlflow.end_run()
+
     with mlflow.start_run(run_name=run_name) as active_run:
         mlflow.set_tags(
             {
@@ -664,30 +705,49 @@ def _log_to_mlflow(
                 "final_model": "true",
             }
         )
+
         flat_config = _flatten_mapping(_to_jsonable(config.to_dict()))
+
         for name, value in flat_config.items():
-            if isinstance(value, (str, int, float, bool)):
-                mlflow.log_param(name[:250], value)
+            log_param_once(name, value)
+
         for name, value in metadata.items():
-            if isinstance(value, (str, int, float, bool)):
-                mlflow.log_param(f"data.{name}"[:250], value)
+            log_param_once(f"metadata.{name}", value)
+
         for name, value in metrics.items():
             _log_metric_safe(mlflow, name, value)
+
         for path in artifacts.values():
             mlflow.log_artifact(str(path))
+
         if ranker.model is not None:
             model_info = mlflow.sklearn.log_model(
                 ranker.model,
                 artifact_path="sklearn_lgbm_ranker",
                 registered_model_name=config.tracking.registered_model_name,
             )
+
             client = mlflow.tracking.MlflowClient()
             client.set_tag(active_run.info.run_id, "mlflow_model_uri", model_info.model_uri)
+
             try:
-                versions = client.search_model_versions(f"name = '{config.tracking.registered_model_name}'")
+                versions = client.search_model_versions(
+                    f"name = '{config.tracking.registered_model_name}'"
+                )
                 latest = sorted(versions, key=lambda version: int(version.version))[-1]
-                client.set_model_version_tag(config.tracking.registered_model_name, latest.version, "stage", config.tracking.prd_tag)
-                client.set_model_version_tag(config.tracking.registered_model_name, latest.version, "final_model", "true")
+
+                client.set_model_version_tag(
+                    config.tracking.registered_model_name,
+                    latest.version,
+                    "stage",
+                    config.tracking.prd_tag,
+                )
+                client.set_model_version_tag(
+                    config.tracking.registered_model_name,
+                    latest.version,
+                    "final_model",
+                    "true",
+                )
             except Exception:
                 pass
 

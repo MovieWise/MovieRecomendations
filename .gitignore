@@ -35,3 +35,7 @@ coverage/
 # Local secrets
 service/frontend/.streamlit/secrets.toml
 !**/secrets.example.toml
+
+# MLflow local outputs
+artifacts/
+mlruns/

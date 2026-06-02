@@ -12,7 +12,7 @@ services:
       - "9001:9001"
 
   minio-create-bucket:
-    image: minio/mc:RELEASE.2024-06-29T01-20-47Z
+    image: minio/mc:latest
     depends_on:
       - minio
     entrypoint: >
