@@ -2,24 +2,37 @@
 
 Этот каталог содержит чистые блокноты для финального наблюдаемого эксперимента `EASE + LightGBM Ranker`.
 
-## Локальная инфраструктура
+## Запуск локальной инфраструктуры
+
+Из корня проекта:
 
 ```bash
 docker compose -f docker-compose.mlflow.yml up -d
 ```
+После запуска доступны:
 
-MLflow UI: `http://localhost:5000`
+- MLflow UI: `http://localhost:5000`
+- MinIO console: `http://localhost:9001`
 
-MinIO console: `http://localhost:9001`
+## Настройка переменных окружения
 
-Локальные переменные окружения:
+Из корня проекта:
 
 ```bash
-set -a
-source configs/mlflow.env.example
-set +a
-export PYTHONPATH="$PWD/src"
+export PYTHONPATH="$PWD/src" 
+
+export MLFLOW_TRACKING_URI=http://localhost:5000 
+export MLFLOW_S3_ENDPOINT_URL=http://localhost:9000
+
+export AWS_ACCESS_KEY_ID=minio 
+export AWS_SECRET_ACCESS_KEY=minio123 
+export AWS_DEFAULT_REGION=us-east-1
 ```
+
+Важно:
+
+- localhost:9000 используется как S3 API endpoint для MLflow;
+- localhost:9001 — только веб-консоль MinIO.
 
 ## Запуск обучения
 
@@ -46,13 +59,20 @@ python -m movie_recs.cli.train \
   --limit-users 200
 ```
 
-Для MLflow-нужен Docker Desktop или совместимый Docker Engine. После установки Docker:
+Для MLflow необходим Docker Desktop или совместимый Docker Engine. После установки Docker:
 
 ```bash
 python -m movie_recs.cli.train \
   --config configs/experiments/hybrid/lgb_ranker.yaml \
   --mlflow
 ```
+
+После запуска:
+
+- run появится в MLflow UI;
+- метрики будут залогированы в MLflow;
+- модель будет зарегистрирована в Model Registry;
+- artifacts будут сохранены в MinIO bucket `mlflow-artifacts`.
 
 Для быстрого smoke-теста:
 
@@ -63,7 +83,19 @@ python -m movie_recs.cli.train \
   --limit-users 200
 ```
 
-`data/processed/hybrid_train.parquet` используется для train/validation, `data/processed/hybrid_test.parquet` используется для финальных test-метрик.
+## Проверка результатов
+
+После успешного запуска необходимо убедиться, что:
+
+- в MLflow UI появился новый run;
+- в MinIO bucket `mlflow-artifacts` сохранены артефакты;
+- модель зарегистрирована в MLflow Model Registry;
+- notebook `03_load_prd_model_predict.ipynb` успешно загружает модель и выполняет предсказание.
+
+## Используемые датасеты
+
+- `data/processed/hybrid_train.parquet` используется для train/validation, 
+- `data/processed/hybrid_test.parquet` используется для финальных test-метрик.
 
 ## Блокноты
 
