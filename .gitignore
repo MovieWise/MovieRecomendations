@@ -22,7 +22,7 @@ venv/
 *.npz
 *.csv
 *.parquet
-artifacts/
+# artifacts/
 data/raw/
 data/processed/
 service/backend/recommendation_service/data/
@@ -35,3 +35,7 @@ coverage/
 # Local secrets
 service/frontend/.streamlit/secrets.toml
 !**/secrets.example.toml
+
+# MLflow local outputs
+artifacts/
+mlruns/

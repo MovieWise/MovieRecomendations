@@ -1,0 +1,22 @@
+{
+  "features": [
+    "score",
+    "popularity",
+    "age",
+    "rating",
+    "runtimeMinutes",
+    "num_translations",
+    "cluster",
+    "has_director",
+    "num_interactions",
+    "main_genre",
+    "main_region",
+    "main_actor_popularity",
+    "user_main_genre_count",
+    "user_main_genre_share",
+    "user_main_region_count",
+    "user_main_region_share",
+    "user_cluster_count",
+    "user_cluster_share"
+  ]
+}

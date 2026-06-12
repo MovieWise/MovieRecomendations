@@ -17,6 +17,7 @@ class DataPaths:
     tags: str = "data/raw/tags.csv"
     content: str = "data/processed/content.parquet"
     hybrid_table: str = "data/processed/hybrid_train.csv"
+    hybrid_test_table: str = "data/processed/hybrid_test.parquet"
     artifacts_root: str = "artifacts"
 
 
@@ -45,6 +46,16 @@ class ArtifactBundle:
 
 
 @dataclass(slots=True)
+class TrackingConfig:
+    """Experiment tracking settings."""
+
+    experiment_name: str = "movie-recs-prd"
+    registered_model_name: str = "MovieRecs_EASE_LGB_Ranker"
+    prd_tag: str = "PRD"
+    tracking_uri: str | None = None
+
+
+@dataclass(slots=True)
 class ExperimentConfig:
     """High-level experiment configuration used by CLI entrypoints."""
 
@@ -58,6 +69,7 @@ class ExperimentConfig:
     training_params: dict[str, Any] = field(default_factory=dict)
     evaluation_params: dict[str, Any] = field(default_factory=dict)
     data: DataPaths = field(default_factory=DataPaths)
+    tracking: TrackingConfig = field(default_factory=TrackingConfig)
     artifacts: ArtifactBundle | None = None
 
     def with_default_artifacts(self) -> "ExperimentConfig":
@@ -70,4 +82,3 @@ class ExperimentConfig:
     def to_dict(self) -> dict[str, Any]:
         """Convert config to a plain dictionary."""
         return asdict(self)
-

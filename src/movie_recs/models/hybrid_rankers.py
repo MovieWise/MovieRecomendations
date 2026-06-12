@@ -58,11 +58,18 @@ class LightGBMHybridRanker:
         if self.model is None:
             raise RuntimeError("Model is not fitted.")
         if hasattr(self.model, "predict_proba"):
-            return self.model.predict_proba(frame[self.feature_names])[:, 1]
-        return self.model.predict(frame[self.feature_names])
+            return np.asarray(self.model.predict_proba(frame[self.feature_names])[:, 1])
+        return np.asarray(self.model.predict(frame[self.feature_names]))
 
     def save(self, path: str | Path) -> Path:
-        return save_pickle(self.__dict__, path)
+        return save_pickle(
+            {
+                "feature_names": self.feature_names,
+                "model": self.model,
+                "categorical_features": self.categorical_features,
+            },
+            path,
+        )
 
     @classmethod
     def load(cls, path: str | Path) -> "LightGBMHybridRanker":
@@ -99,7 +106,13 @@ class CatBoostHybridRanker:
         return self.model.predict(pool)
 
     def save(self, path: str | Path) -> Path:
-        return save_pickle(self.__dict__, path)
+        return save_pickle(
+            {
+                "feature_names": self.feature_names,
+                "model": self.model,
+            },
+            path,
+        )
 
     @classmethod
     def load(cls, path: str | Path) -> "CatBoostHybridRanker":
